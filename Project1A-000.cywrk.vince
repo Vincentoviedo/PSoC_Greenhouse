@@ -1,0 +1,299 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CyXmlSerializer>
+<!--This file is machine generated and read. It is not intended to be edited by hand.-->
+<!--Due to this, there is no schema for this file.-->
+<CyGuid_843a90a4-0c4b-4e44-991d-05e7fb117a21 type_name="CyDesigner.Common.ProjMgmt.Model.CyPrjMgmtWrkspcCustomData" version="4">
+<CyGuid_fdba8dfd-b15b-4469-9bbb-9e40c3e70997 type_name="CyDesigner.Common.Base.CyCustomData" version="2">
+<userData>
+<dataGuid v="5f2be1a5-0687-4501-bb8c-cf21cb8211bf">
+<CyGuid_5f2be1a5-0687-4501-bb8c-cf21cb8211bf type_name="CyDesigner.Common.ProjMgmt.GUI.CyBookmarkData" version="1">
+<indicators />
+</CyGuid_5f2be1a5-0687-4501-bb8c-cf21cb8211bf>
+</dataGuid>
+<dataGuid v="1b906a0f-a7b6-4e4d-a428-82f98b53cb35">
+<CyGuid_1b906a0f-a7b6-4e4d-a428-82f98b53cb35 type_name="CyDesigner.Common.ProjMgmt.GUI.CyExplorerWindow+CyExplorerWindowState" version="3" SelectedTab="Source">
+<TreeKeys>
+<v>Source</v>
+<v>Components</v>
+<v>Output</v>
+</TreeKeys>
+<TreeStates>
+<CyGuid_2a325b3b-c96a-4e9f-b7a0-2c44ecb5f237 type_name="CyDesigner.Common.Base.Controls.CyTreeViewState" version="1" SelectedNodeId="Project1A-000\Project1A\FreeRTOS">
+<ExpandedNodeIds>
+<v>Project1A-000</v>
+<v>Project1A-000\Project1A</v>
+<v>Project1A-000\Project1A\TopDesign</v>
+<v>Project1A-000\Project1A\Project1A.cydwr</v>
+<v>Project1A-000\Project1A\Project1A.cydwr\Pins</v>
+<v>Project1A-000\Project1A\Project1A.cydwr\Analog</v>
+<v>Project1A-000\Project1A\Project1A.cydwr\Clocks</v>
+<v>Project1A-000\Project1A\Project1A.cydwr\Interrupts</v>
+<v>Project1A-000\Project1A\Project1A.cydwr\DMA</v>
+<v>Project1A-000\Project1A\Project1A.cydwr\System</v>
+<v>Project1A-000\Project1A\Project1A.cydwr\Directives</v>
+<v>Project1A-000\Project1A\Project1A.cydwr\Flash Security</v>
+<v>Project1A-000\Project1A\Project1A.cydwr\EEPROM</v>
+<v>Project1A-000\Project1A\FreeRTOS</v>
+<v>Project1A-000\Project1A\FreeRTOS\ARM_CM3</v>
+<v>Project1A-000\Project1A\FreeRTOS\ARM_CM3\port.c</v>
+<v>Project1A-000\Project1A\FreeRTOS\ARM_CM3\portmacro.h</v>
+<v>Project1A-000\Project1A\FreeRTOS\include</v>
+<v>Project1A-000\Project1A\FreeRTOS\include\croutine.h</v>
+<v>Project1A-000\Project1A\FreeRTOS\include\deprecated_definitions.h</v>
+<v>Project1A-000\Project1A\FreeRTOS\include\event_groups.h</v>
+<v>Project1A-000\Project1A\FreeRTOS\include\FreeRTOS.h</v>
+<v>Project1A-000\Project1A\FreeRTOS\include\list.h</v>
+<v>Project1A-000\Project1A\FreeRTOS\include\message_buffer.h</v>
+<v>Project1A-000\Project1A\FreeRTOS\include\mpu_prototypes.h</v>
+<v>Project1A-000\Project1A\FreeRTOS\include\mpu_wrappers.h</v>
+<v>Project1A-000\Project1A\FreeRTOS\include\portable.h</v>
+<v>Project1A-000\Project1A\FreeRTOS\include\projdefs.h</v>
+<v>Project1A-000\Project1A\FreeRTOS\include\queue.h</v>
+<v>Project1A-000\Project1A\FreeRTOS\include\semphr.h</v>
+<v>Project1A-000\Project1A\FreeRTOS\include\stack_macros.h</v>
+<v>Project1A-000\Project1A\FreeRTOS\include\StackMacros.h</v>
+<v>Project1A-000\Project1A\FreeRTOS\include\stream_buffer.h</v>
+<v>Project1A-000\Project1A\FreeRTOS\include\task.h</v>
+<v>Project1A-000\Project1A\FreeRTOS\include\timers.h</v>
+<v>Project1A-000\Project1A\FreeRTOS\MemMang</v>
+<v>Project1A-000\Project1A\FreeRTOS\MemMang\heap_1.c</v>
+<v>Project1A-000\Project1A\FreeRTOS\croutine.c</v>
+<v>Project1A-000\Project1A\FreeRTOS\event_groups.c</v>
+<v>Project1A-000\Project1A\FreeRTOS\FreeRTOS_PSoC.c</v>
+<v>Project1A-000\Project1A\FreeRTOS\FreeRTOS_PSoC.h</v>
+<v>Project1A-000\Project1A\FreeRTOS\FreeRTOSConfig.h</v>
+<v>Project1A-000\Project1A\FreeRTOS\list.c</v>
+<v>Project1A-000\Project1A\FreeRTOS\queue.c</v>
+<v>Project1A-000\Project1A\FreeRTOS\stream_buffer.c</v>
+<v>Project1A-000\Project1A\FreeRTOS\tasks.c</v>
+<v>Project1A-000\Project1A\FreeRTOS\timers.c</v>
+<v>Project1A-000\Project1A\Header Files</v>
+<v>Project1A-000\Project1A\Header Files\cyapicallbacks.h</v>
+<v>Project1A-000\Project1A\Source Files</v>
+<v>Project1A-000\Project1A\Source Files\main.c</v>
+<v>Project1A-000\Project1A\Generated_Source</v>
+<v>Project1A-000\Project1A\Generated_Source\PSoC5</v>
+</ExpandedNodeIds>
+<VisibleNodeIds>
+<v>Project1A-000</v>
+<v>Project1A-000\Project1A</v>
+<v>Project1A-000\Project1A\TopDesign</v>
+<v>Project1A-000\Project1A\Project1A.cydwr</v>
+<v>Project1A-000\Project1A\Project1A.cydwr\Pins</v>
+<v>Project1A-000\Project1A\Project1A.cydwr\Analog</v>
+<v>Project1A-000\Project1A\Project1A.cydwr\Clocks</v>
+<v>Project1A-000\Project1A\Project1A.cydwr\Interrupts</v>
+<v>Project1A-000\Project1A\Project1A.cydwr\DMA</v>
+<v>Project1A-000\Project1A\Project1A.cydwr\System</v>
+<v>Project1A-000\Project1A\Project1A.cydwr\Directives</v>
+<v>Project1A-000\Project1A\Project1A.cydwr\Flash Security</v>
+<v>Project1A-000\Project1A\Project1A.cydwr\EEPROM</v>
+<v>Project1A-000\Project1A\FreeRTOS</v>
+<v>Project1A-000\Project1A\FreeRTOS\ARM_CM3</v>
+<v>Project1A-000\Project1A\FreeRTOS\ARM_CM3\port.c</v>
+<v>Project1A-000\Project1A\FreeRTOS\ARM_CM3\portmacro.h</v>
+<v>Project1A-000\Project1A\FreeRTOS\include</v>
+<v>Project1A-000\Project1A\FreeRTOS\include\croutine.h</v>
+<v>Project1A-000\Project1A\FreeRTOS\include\deprecated_definitions.h</v>
+<v>Project1A-000\Project1A\FreeRTOS\include\event_groups.h</v>
+<v>Project1A-000\Project1A\FreeRTOS\include\FreeRTOS.h</v>
+<v>Project1A-000\Project1A\FreeRTOS\include\list.h</v>
+<v>Project1A-000\Project1A\FreeRTOS\include\message_buffer.h</v>
+<v>Project1A-000\Project1A\FreeRTOS\include\mpu_prototypes.h</v>
+<v>Project1A-000\Project1A\FreeRTOS\include\mpu_wrappers.h</v>
+<v>Project1A-000\Project1A\FreeRTOS\include\portable.h</v>
+<v>Project1A-000\Project1A\FreeRTOS\include\projdefs.h</v>
+<v>Project1A-000\Project1A\FreeRTOS\include\queue.h</v>
+<v>Project1A-000\Project1A\FreeRTOS\include\semphr.h</v>
+<v>Project1A-000\Project1A\FreeRTOS\include\stack_macros.h</v>
+<v>Project1A-000\Project1A\FreeRTOS\include\StackMacros.h</v>
+<v>Project1A-000\Project1A\FreeRTOS\include\stream_buffer.h</v>
+<v>Project1A-000\Project1A\FreeRTOS\include\task.h</v>
+<v>Project1A-000\Project1A\FreeRTOS\include\timers.h</v>
+<v>Project1A-000\Project1A\FreeRTOS\MemMang</v>
+<v>Project1A-000\Project1A\FreeRTOS\MemMang\heap_1.c</v>
+<v>Project1A-000\Project1A\FreeRTOS\croutine.c</v>
+<v>Project1A-000\Project1A\FreeRTOS\event_groups.c</v>
+<v>Project1A-000\Project1A\FreeRTOS\FreeRTOS_PSoC.c</v>
+<v>Project1A-000\Project1A\FreeRTOS\FreeRTOS_PSoC.h</v>
+</VisibleNodeIds>
+</CyGuid_2a325b3b-c96a-4e9f-b7a0-2c44ecb5f237>
+<CyGuid_2a325b3b-c96a-4e9f-b7a0-2c44ecb5f237 type_name="CyDesigner.Common.Base.Controls.CyTreeViewState" version="1" SelectedNodeId="">
+<ExpandedNodeIds>
+<v>Project1A-000</v>
+<v>Project1A-000\Project1A</v>
+<v>Project1A-000\Project1A\TopDesign</v>
+<v>Project1A-000\Project1A\TopDesign\TopDesign.cysch</v>
+</ExpandedNodeIds>
+<VisibleNodeIds>
+<v>Project1A-000</v>
+<v>Project1A-000\Project1A</v>
+<v>Project1A-000\Project1A\TopDesign</v>
+<v>Project1A-000\Project1A\TopDesign\TopDesign.cysch</v>
+</VisibleNodeIds>
+</CyGuid_2a325b3b-c96a-4e9f-b7a0-2c44ecb5f237>
+<CyGuid_2a325b3b-c96a-4e9f-b7a0-2c44ecb5f237 type_name="CyDesigner.Common.Base.Controls.CyTreeViewState" version="1" SelectedNodeId="">
+<ExpandedNodeIds>
+<v>Project1A-000</v>
+<v>Project1A-000\Project1A</v>
+<v>Project1A-000\Project1A\CortexM3</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\AMUX.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\Clock_1.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\Cm3Start.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\croutine.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\cy_em_eeprom.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\CyBootAsmGnu.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\CyDmac.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\cyfitter_cfg.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\CyFlash.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\CyLib.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\cymetadata.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\cyPm.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\CySpc.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\cyutils.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\event_groups.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\Fan.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\FreeRTOS_PSoC.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\heap_1.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\HeatPad.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\inTemp.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\ISR_UART.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\LCD.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\LCD_LCDPort.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\LCD_PM.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\list.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\main.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\outTemp.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\port.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\PRes.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\queue.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\SARADC.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\SARADC_INT.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\SARADC_IRQ.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\SARADC_PM.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\SARADC_theACLK.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\SERVO.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\SERVOPWM.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\SERVOPWM_PM.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\stream_buffer.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\tasks.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\timers.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\UART.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\UART_BOOT.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\UART_INT.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\UART_IntClock.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\UART_PM.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\UVLight.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Project1A.elf</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Project1A.hex</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Project1A.map</v>
+<v>Project1A-000\Project1A\Project1A.gpdsc</v>
+<v>Project1A-000\Project1A\Project1A.rpt</v>
+<v>Project1A-000\Project1A\Project1A_timing.html</v>
+</ExpandedNodeIds>
+<VisibleNodeIds>
+<v>Project1A-000</v>
+<v>Project1A-000\Project1A</v>
+<v>Project1A-000\Project1A\CortexM3</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\AMUX.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\Clock_1.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\Cm3Start.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\croutine.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\cy_em_eeprom.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\CyBootAsmGnu.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\CyDmac.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\cyfitter_cfg.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\CyFlash.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\CyLib.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\cymetadata.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\cyPm.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\CySpc.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\cyutils.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\event_groups.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\Fan.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\FreeRTOS_PSoC.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\heap_1.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\HeatPad.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\inTemp.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\ISR_UART.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\LCD.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\LCD_LCDPort.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\LCD_PM.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\list.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\main.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\outTemp.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\port.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\PRes.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\queue.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\SARADC.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\SARADC_INT.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\SARADC_IRQ.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\SARADC_PM.lst</v>
+<v>Project1A-000\Project1A\CortexM3\ARM_GCC_541\Debug\Listing Files\SARADC_theACLK.lst</v>
+</VisibleNodeIds>
+</CyGuid_2a325b3b-c96a-4e9f-b7a0-2c44ecb5f237>
+</TreeStates>
+<TreeKeysV2>
+<v>Datasheet</v>
+</TreeKeysV2>
+<TreeStatesV2>
+<CyGuid_2a325b3b-c96a-4e9f-b7a0-2c44ecb5f237 type_name="CyDesigner.Common.Base.Controls.CyTreeViewState" version="1" SelectedNodeId="">
+<ExpandedNodeIds>
+<v>Project1A-000</v>
+<v>Project1A-000\Project1A</v>
+<v>Project1A-000\Project1A\PSoC 5LP Architecture TRM</v>
+<v>Project1A-000\Project1A\CY8C58LP Family Datasheet</v>
+<v>Project1A-000\Project1A\System Reference Guides</v>
+<v>Project1A-000\Project1A\System Reference Guides\cy_boot_v6_0</v>
+<v>Project1A-000\Project1A\ADC_SAR_v3_10.pdf</v>
+<v>Project1A-000\Project1A\AMux_v1_80.pdf</v>
+<v>Project1A-000\Project1A\CharLCD_v2_20.pdf</v>
+<v>Project1A-000\Project1A\cy_clock_v2_20.pdf</v>
+<v>Project1A-000\Project1A\cy_isr_v1_70.pdf</v>
+<v>Project1A-000\Project1A\cy_pins_v2_20</v>
+<v>Project1A-000\Project1A\cy_pins_v2_20\cy_pins_v2_20.pdf</v>
+<v>Project1A-000\Project1A\PWM_v3_30.pdf</v>
+<v>Project1A-000\Project1A\UART_v2_50.pdf</v>
+</ExpandedNodeIds>
+<VisibleNodeIds>
+<v>Project1A-000</v>
+<v>Project1A-000\Project1A</v>
+<v>Project1A-000\Project1A\PSoC 5LP Architecture TRM</v>
+<v>Project1A-000\Project1A\CY8C58LP Family Datasheet</v>
+<v>Project1A-000\Project1A\System Reference Guides</v>
+<v>Project1A-000\Project1A\System Reference Guides\cy_boot_v6_0</v>
+<v>Project1A-000\Project1A\ADC_SAR_v3_10.pdf</v>
+<v>Project1A-000\Project1A\AMux_v1_80.pdf</v>
+<v>Project1A-000\Project1A\CharLCD_v2_20.pdf</v>
+<v>Project1A-000\Project1A\cy_clock_v2_20.pdf</v>
+<v>Project1A-000\Project1A\cy_isr_v1_70.pdf</v>
+<v>Project1A-000\Project1A\cy_pins_v2_20</v>
+<v>Project1A-000\Project1A\cy_pins_v2_20\cy_pins_v2_20.pdf</v>
+<v>Project1A-000\Project1A\PWM_v3_30.pdf</v>
+<v>Project1A-000\Project1A\UART_v2_50.pdf</v>
+</VisibleNodeIds>
+</CyGuid_2a325b3b-c96a-4e9f-b7a0-2c44ecb5f237>
+</TreeStatesV2>
+</CyGuid_1b906a0f-a7b6-4e4d-a428-82f98b53cb35>
+</dataGuid>
+</userData>
+</CyGuid_fdba8dfd-b15b-4469-9bbb-9e40c3e70997>
+<Unloaded />
+<OpenDocs />
+<OpenDocsLayout><![CDATA[<?xml version="1.0"?><!--
+
+  Actipro Docking/MDI for WinForms
+  Copyright (c) 2001-2016 Actipro Software LLC.  All rights reserved.
+  http://www.actiprosoftware.com
+
+--><DocumentLayout Version="1.0"><LayoutData><TabbedMdiRootContainer Orientation="Horizontal"><TabbedMdiContainer Size="1464, 588" SelectedTabbedMdiWindow="5bc1bffd-ea38-4090-9e24-fed7cf1f532b"><ToolWindow Key="Start Page:bd4649ab-da6b-4d04-a663-c722b8bf99db:Start Page" Guid="5bc1bffd-ea38-4090-9e24-fed7cf1f532b" /></TabbedMdiContainer></TabbedMdiRootContainer><FloatingContainers /></LayoutData></DocumentLayout>]]></OpenDocsLayout>
+<config v="" />
+<AutoUpdate v="true" />
+</CyGuid_843a90a4-0c4b-4e44-991d-05e7fb117a21>
+</CyXmlSerializer>

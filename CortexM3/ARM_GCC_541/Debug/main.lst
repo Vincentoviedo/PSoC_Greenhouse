@@ -1,0 +1,4962 @@
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 1
+
+
+   1              		.syntax unified
+   2              		.cpu cortex-m3
+   3              		.fpu softvfp
+   4              		.eabi_attribute 20, 1
+   5              		.eabi_attribute 21, 1
+   6              		.eabi_attribute 23, 3
+   7              		.eabi_attribute 24, 1
+   8              		.eabi_attribute 25, 1
+   9              		.eabi_attribute 26, 1
+  10              		.eabi_attribute 30, 1
+  11              		.eabi_attribute 34, 1
+  12              		.eabi_attribute 18, 4
+  13              		.thumb
+  14              		.syntax unified
+  15              		.file	"main.c"
+  16              		.text
+  17              	.Ltext0:
+  18              		.cfi_sections	.debug_frame
+  19              		.section	.text.MyUartISR,"ax",%progbits
+  20              		.align	2
+  21              		.global	MyUartISR
+  22              		.thumb
+  23              		.thumb_func
+  24              		.type	MyUartISR, %function
+  25              	MyUartISR:
+  26              	.LFB71:
+  27              		.file 1 "main.c"
+   1:main.c        **** /* ========================================
+   2:main.c        ****  EE 4450 - Project by Team 10
+   3:main.c        ****  Carlos Ochoa
+   4:main.c        ****  Vincent Oviedo
+   5:main.c        ****  
+   6:main.c        **** ===========================================
+   7:main.c        ****  Station 1
+   8:main.c        **** ===========================================
+   9:main.c        **** SYSTEM
+  10:main.c        **** lcd 2[6:0]
+  11:main.c        **** uart 12[6,7]
+  12:main.c        **** 
+  13:main.c        **** INPUT 
+  14:main.c        **** tempin 3.2
+  15:main.c        **** tempout 3.4
+  16:main.c        **** pres 3.6
+  17:main.c        **** 
+  18:main.c        **** OUTPUT
+  19:main.c        **** 
+  20:main.c        **** uv light 1.4
+  21:main.c        **** servo 1.5
+  22:main.c        **** fan 1.6
+  23:main.c        **** hpad 1.7
+  24:main.c        **** 
+  25:main.c        **** 
+  26:main.c        **** SENSOR -> QUEUE                                       TASK 1
+  27:main.c        ****           QUEUE -> LCD                                TASK 2
+  28:main.c        **** (send)    QUEUE -> UART                               TASK 3
+  29:main.c        **** (recieve)          UART -> ISR -> MSG                 TASK 3
+  30:main.c        ****                                   MSG -> OUTPUT       TASK 4
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 2
+
+
+  31:main.c        **** ===========================================
+  32:main.c        ****             
+  33:main.c        **** */
+  34:main.c        **** 
+  35:main.c        **** #include "project.h"
+  36:main.c        **** #include <stdio.h>
+  37:main.c        **** #include <stdlib.h>
+  38:main.c        **** #include <stdint.h>
+  39:main.c        **** #include <stdbool.h>
+  40:main.c        **** #include <math.h>
+  41:main.c        **** //FREERTOS headers
+  42:main.c        **** #include "FreeRTOS_PSoC.h"
+  43:main.c        **** #include "FreeRTOS.h"
+  44:main.c        **** #include "task.h"
+  45:main.c        **** #include "timers.h"
+  46:main.c        **** #include "queue.h"
+  47:main.c        **** #include "event_groups.h"
+  48:main.c        **** #include "semphr.h"
+  49:main.c        **** #include "message_buffer.h"
+  50:main.c        **** /*
+  51:main.c        **** TODO DONE!
+  52:main.c        **** Finish Main x
+  53:main.c        **** create message buffer x
+  54:main.c        **** Write Messages
+  55:main.c        **** create tasks x
+  56:main.c        **** write tasks codeX
+  57:main.c        **** Write Queuex
+  58:main.c        **** ADD ISR X
+  59:main.c        **** 
+  60:main.c        **** Verify UART speaksX
+  61:main.c        **** manually test sensors x
+  62:main.c        **** */
+  63:main.c        **** 
+  64:main.c        **** // global variables
+  65:main.c        **** MessageBufferHandle_t   xMessageBuffer = NULL; 
+  66:main.c        **** #define MESSAGE_BUFFER_SIZE 100
+  67:main.c        **** TaskHandle_t    		xTask4;
+  68:main.c        **** 
+  69:main.c        **** //our sensor structure
+  70:main.c        **** typedef struct Sensors {
+  71:main.c        ****     uint8_t     id;
+  72:main.c        ****     double      data[4];
+  73:main.c        ****    } Sensors;
+  74:main.c        **** 
+  75:main.c        **** //Queue info
+  76:main.c        **** #define QUEUE_LENGTH	8
+  77:main.c        **** #define QUEUE_ITEM_SIZE sizeof(Sensors)
+  78:main.c        **** QueueHandle_t 			xQueue = NULL;
+  79:main.c        **** 
+  80:main.c        **** //ISR stuff
+  81:main.c        **** CY_ISR_PROTO(MyUartISR);
+  82:main.c        **** 
+  83:main.c        **** // Creating our 4 task functions
+  84:main.c        **** void     vGetData       (void *pvParameters);
+  85:main.c        **** void     vDisplayData   (void *pvParameters);
+  86:main.c        **** void     vUARTComm      (void *pvParameters);
+  87:main.c        **** void     vTasks         (void *pvParameters);
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 3
+
+
+  88:main.c        **** float    GetTemp        (void);
+  89:main.c        **** bool     GetTemp2       (float *Temp);
+  90:main.c        **** 
+  91:main.c        **** void MyPSOCSetup();
+  92:main.c        **** 
+  93:main.c        **** int main(void)
+  94:main.c        **** {
+  95:main.c        ****     
+  96:main.c        ****     BaseType_t  err;
+  97:main.c        ****     //CyGlobalIntEnable; /* Enable global interrupts. */
+  98:main.c        ****     /* Place your initialization/startup code here (e.g. MyInst_Start()) */
+  99:main.c        ****     
+ 100:main.c        ****     //Starting up all our services, AMUX, RTOS, ADC, SERVO
+ 101:main.c        ****     AMUX_Start();
+ 102:main.c        ****     MyPSOCSetup();
+ 103:main.c        ****     SARADC_Start();
+ 104:main.c        ****     FreeRTOS_Init();
+ 105:main.c        ****     SERVOPWM_Start();
+ 106:main.c        ****     
+ 107:main.c        ****     //Making message buffer
+ 108:main.c        ****     xMessageBuffer = xMessageBufferCreate(MESSAGE_BUFFER_SIZE);
+ 109:main.c        ****     
+ 110:main.c        ****     
+ 111:main.c        ****     if (xMessageBuffer == NULL) {
+ 112:main.c        ****         // If message buffer was NOT created successfully
+ 113:main.c        ****         LCD_Position(1,0);    
+ 114:main.c        ****         LCD_PrintString("Can't create MsgBuf");
+ 115:main.c        ****         while(1);
+ 116:main.c        ****     }
+ 117:main.c        ****        
+ 118:main.c        ****     //MAKE QUEUE
+ 119:main.c        **** 	xQueue = xQueueCreate(QUEUE_LENGTH, QUEUE_ITEM_SIZE);
+ 120:main.c        ****     if (xQueue == NULL) {
+ 121:main.c        ****         LCD_Position(1,0);    
+ 122:main.c        ****         LCD_PrintString("QUEUE ERROR");
+ 123:main.c        ****         while(1);
+ 124:main.c        ****     }
+ 125:main.c        ****    
+ 126:main.c        ****     // Create Tasks
+ 127:main.c        ****     err = xTaskCreate ( vGetData, //TaskFunction_t  pvTaskCode,
+ 128:main.c        ****                             "LCD Task", 
+ 129:main.c        ****                             configMINIMAL_STACK_SIZE,
+ 130:main.c        ****                             NULL, //void *pvParameters,
+ 131:main.c        ****                             configMAX_PRIORITIES-1, //ubasetype_t uxpriority
+ 132:main.c        ****                             NULL //taskhandle
+ 133:main.c        ****     );
+ 134:main.c        ****     
+ 135:main.c        ****     if (err != pdPASS){
+ 136:main.c        ****         LCD_Position(1,0);
+ 137:main.c        ****         LCD_PrintString("Cannot create Task!");
+ 138:main.c        ****         while(1){};
+ 139:main.c        ****     }
+ 140:main.c        ****      err = xTaskCreate ( vDisplayData, //TaskFunction_t  pvTaskCode,
+ 141:main.c        ****                             "Show Readings", 
+ 142:main.c        ****                             configMINIMAL_STACK_SIZE,
+ 143:main.c        ****                             NULL, //void *pvParameters,
+ 144:main.c        ****                             configMAX_PRIORITIES-1, //ubasetype_t uxpriority
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 4
+
+
+ 145:main.c        ****                             NULL //taskhandle
+ 146:main.c        ****     );
+ 147:main.c        ****     if (err != pdPASS){
+ 148:main.c        ****         LCD_Position(1,0);
+ 149:main.c        ****         LCD_PrintString("Cannot create Task!");
+ 150:main.c        ****         while(1){};
+ 151:main.c        ****     }
+ 152:main.c        **** 	
+ 153:main.c        ****      err = xTaskCreate ( vUARTComm, //TaskFunction_t  pvTaskCode,
+ 154:main.c        ****                             "UART SynC", 
+ 155:main.c        ****                             configMINIMAL_STACK_SIZE,
+ 156:main.c        ****                             NULL, //void *pvParameters,
+ 157:main.c        ****                             configMAX_PRIORITIES-1, //ubasetype_t uxpriority
+ 158:main.c        ****                             NULL //taskhandle
+ 159:main.c        ****     );
+ 160:main.c        ****     if (err != pdPASS){
+ 161:main.c        ****         LCD_Position(1,0);
+ 162:main.c        ****         LCD_PrintString("Cannot create Task!");
+ 163:main.c        ****         while(1){};
+ 164:main.c        ****     }
+ 165:main.c        **** 	
+ 166:main.c        ****      err = xTaskCreate ( vTasks, //TaskFunction_t  pvTaskCode,
+ 167:main.c        ****                             "Adujusting Greenhouse", 
+ 168:main.c        ****                             configMINIMAL_STACK_SIZE,
+ 169:main.c        ****                             xMessageBuffer, //void *pvParameters,
+ 170:main.c        ****                             6, //ubasetype_t uxpriority
+ 171:main.c        ****                             NULL //taskhandle
+ 172:main.c        ****     );
+ 173:main.c        ****     if (err != pdPASS){
+ 174:main.c        ****         LCD_Position(1,0);
+ 175:main.c        ****         LCD_PrintString("Cannot create Task!");
+ 176:main.c        ****         while(1){};
+ 177:main.c        ****     }
+ 178:main.c        ****     //start scheduler
+ 179:main.c        ****     vTaskStartScheduler();
+ 180:main.c        ****     
+ 181:main.c        ****     for(;;)
+ 182:main.c        ****     {
+ 183:main.c        ****         /* Place your application code here. */
+ 184:main.c        ****     }
+ 185:main.c        **** }
+ 186:main.c        **** void MyPSOCSetup()
+ 187:main.c        **** {
+ 188:main.c        ****     LCD_Start();
+ 189:main.c        ****     LCD_ClearDisplay();
+ 190:main.c        ****     LCD_Position(0,0);
+ 191:main.c        ****     LCD_PrintString("EE4450 FREERTOS");
+ 192:main.c        ****     LCD_ClearDisplay();
+ 193:main.c        ****     CyDelay(1000);
+ 194:main.c        ****     
+ 195:main.c        ****     ISR_UART_StartEx(MyUartISR);
+ 196:main.c        ****     UART_Start();
+ 197:main.c        ****     UART_ClearRxBuffer();
+ 198:main.c        ****     UART_ClearTxBuffer();
+ 199:main.c        ****     //UART_PutString("Team 10 Greenhouse Final!");
+ 200:main.c        ****     
+ 201:main.c        **** }
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 5
+
+
+ 202:main.c        **** 
+ 203:main.c        **** //----------------------------
+ 204:main.c        **** typedef enum STATES{
+ 205:main.c        ****     S_IDLE,
+ 206:main.c        ****     S_GOTDATA
+ 207:main.c        **** } STATES;
+ 208:main.c        **** #define START_CHAR '+'
+ 209:main.c        **** #define STOP_CHAR ';'
+ 210:main.c        **** //-----------------------------------------
+ 211:main.c        **** CY_ISR(MyUartISR)
+ 212:main.c        **** {
+  28              		.loc 1 212 0
+  29              		.cfi_startproc
+  30              		@ args = 0, pretend = 0, frame = 8
+  31              		@ frame_needed = 0, uses_anonymous_args = 0
+  32 0000 30B5     		push	{r4, r5, lr}
+  33              		.cfi_def_cfa_offset 12
+  34              		.cfi_offset 4, -12
+  35              		.cfi_offset 5, -8
+  36              		.cfi_offset 14, -4
+  37 0002 83B0     		sub	sp, sp, #12
+  38              		.cfi_def_cfa_offset 24
+ 213:main.c        ****     static  char    buf[20];
+ 214:main.c        ****     static  STATES  state = S_IDLE;
+ 215:main.c        ****     static  int     idx = 0;
+ 216:main.c        ****     char            ch;
+ 217:main.c        ****     
+ 218:main.c        ****     BaseType_t      xHigherPriorityTaskToken = pdFALSE; // Initialized to pdFALSE
+  39              		.loc 1 218 0
+  40 0004 0023     		movs	r3, #0
+  41 0006 0193     		str	r3, [sp, #4]
+ 219:main.c        ****     
+ 220:main.c        ****     while ( UART_GetRxBufferSize() > 0) {   // As long as this function gives us any number bigger 
+  42              		.loc 1 220 0
+  43 0008 2EE0     		b	.L2
+  44              	.L8:
+ 221:main.c        ****         ch = UART_GetChar();
+  45              		.loc 1 221 0
+  46 000a FFF7FEFF 		bl	UART_GetChar
+  47              	.LVL0:
+ 222:main.c        ****         if (ch == '\0')
+  48              		.loc 1 222 0
+  49 000e 0246     		mov	r2, r0
+  50 0010 50B3     		cbz	r0, .L2
+ 223:main.c        ****             continue;   // go back to while loop
+ 224:main.c        ****         switch (state) {
+  51              		.loc 1 224 0
+  52 0012 194B     		ldr	r3, .L10
+  53 0014 1B78     		ldrb	r3, [r3]	@ zero_extendqisi2
+  54 0016 13B1     		cbz	r3, .L4
+  55 0018 012B     		cmp	r3, #1
+  56 001a 08D0     		beq	.L5
+  57 001c 24E0     		b	.L2
+  58              	.L4:
+ 225:main.c        ****             case S_IDLE:
+ 226:main.c        ****                 if (ch == START_CHAR) {
+  59              		.loc 1 226 0
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 6
+
+
+  60 001e 2B28     		cmp	r0, #43
+  61 0020 22D1     		bne	.L2
+ 227:main.c        ****                     idx = 0;
+  62              		.loc 1 227 0
+  63 0022 154B     		ldr	r3, .L10
+  64 0024 0022     		movs	r2, #0
+  65 0026 5A60     		str	r2, [r3, #4]
+ 228:main.c        ****                     state = S_GOTDATA;
+  66              		.loc 1 228 0
+  67 0028 0122     		movs	r2, #1
+  68 002a 1A70     		strb	r2, [r3]
+  69 002c 1CE0     		b	.L2
+  70              	.L5:
+ 229:main.c        ****                  }            
+ 230:main.c        ****                 break;
+ 231:main.c        ****             case S_GOTDATA:
+ 232:main.c        ****                 if (idx > 19) {
+  71              		.loc 1 232 0
+  72 002e 124B     		ldr	r3, .L10
+  73 0030 5B68     		ldr	r3, [r3, #4]
+  74 0032 132B     		cmp	r3, #19
+  75 0034 03DD     		ble	.L6
+ 233:main.c        ****                     state = S_IDLE;
+  76              		.loc 1 233 0
+  77 0036 0022     		movs	r2, #0
+  78 0038 0F4B     		ldr	r3, .L10
+  79 003a 1A70     		strb	r2, [r3]
+  80 003c 14E0     		b	.L2
+  81              	.L6:
+ 234:main.c        ****                 } else if (ch == STOP_CHAR) {
+  82              		.loc 1 234 0
+  83 003e 3B28     		cmp	r0, #59
+  84 0040 0DD1     		bne	.L7
+ 235:main.c        ****                     buf[idx] = '\0';
+  85              		.loc 1 235 0
+  86 0042 0D4C     		ldr	r4, .L10
+  87 0044 E218     		adds	r2, r4, r3
+  88 0046 0025     		movs	r5, #0
+  89 0048 1572     		strb	r5, [r2, #8]
+ 236:main.c        ****                     idx++;
+  90              		.loc 1 236 0
+  91 004a 5A1C     		adds	r2, r3, #1
+  92 004c 6260     		str	r2, [r4, #4]
+ 237:main.c        ****                     xMessageBufferSendFromISR(xMessageBuffer, buf, idx, &xHigherPriorityTaskToken);
+  93              		.loc 1 237 0
+  94 004e 01AB     		add	r3, sp, #4
+  95 0050 04F10801 		add	r1, r4, #8
+  96 0054 E069     		ldr	r0, [r4, #28]
+  97              	.LVL1:
+  98 0056 FFF7FEFF 		bl	xStreamBufferSendFromISR
+  99              	.LVL2:
+ 238:main.c        ****                     state = S_IDLE;
+ 100              		.loc 1 238 0
+ 101 005a 2570     		strb	r5, [r4]
+ 102 005c 04E0     		b	.L2
+ 103              	.LVL3:
+ 104              	.L7:
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 7
+
+
+ 239:main.c        ****                 } else {
+ 240:main.c        ****                     buf[idx] = ch;
+ 105              		.loc 1 240 0
+ 106 005e 0649     		ldr	r1, .L10
+ 107 0060 C818     		adds	r0, r1, r3
+ 108              	.LVL4:
+ 109 0062 0272     		strb	r2, [r0, #8]
+ 241:main.c        ****                     idx++;
+ 110              		.loc 1 241 0
+ 111 0064 0133     		adds	r3, r3, #1
+ 112 0066 4B60     		str	r3, [r1, #4]
+ 113              	.L2:
+ 220:main.c        ****         ch = UART_GetChar();
+ 114              		.loc 1 220 0
+ 115 0068 FFF7FEFF 		bl	UART_GetRxBufferSize
+ 116              	.LVL5:
+ 117 006c 0028     		cmp	r0, #0
+ 118 006e CCD1     		bne	.L8
+ 242:main.c        ****                 }
+ 243:main.c        ****                 break;
+ 244:main.c        ****         }
+ 245:main.c        ****     }
+ 246:main.c        ****     
+ 247:main.c        ****     UART_ReadRxData();  // Clear UART INT signal
+ 119              		.loc 1 247 0
+ 120 0070 FFF7FEFF 		bl	UART_ReadRxData
+ 121              	.LVL6:
+ 248:main.c        **** }
+ 122              		.loc 1 248 0
+ 123 0074 03B0     		add	sp, sp, #12
+ 124              		.cfi_def_cfa_offset 12
+ 125              		@ sp needed
+ 126 0076 30BD     		pop	{r4, r5, pc}
+ 127              	.L11:
+ 128              		.align	2
+ 129              	.L10:
+ 130 0078 00000000 		.word	.LANCHOR0
+ 131              		.cfi_endproc
+ 132              	.LFE71:
+ 133              		.size	MyUartISR, .-MyUartISR
+ 134              		.global	__aeabi_dcmpeq
+ 135              		.section	.text.vDisplayData,"ax",%progbits
+ 136              		.align	2
+ 137              		.global	vDisplayData
+ 138              		.thumb
+ 139              		.thumb_func
+ 140              		.type	vDisplayData, %function
+ 141              	vDisplayData:
+ 142              	.LFB73:
+ 249:main.c        **** /*Read data from PhotoResistor, OutTEMP, InTemp, Humidifier.
+ 250:main.c        ****  output to queue buffer */
+ 251:main.c        **** void vGetData(void *pvParameters)
+ 252:main.c        **** {
+ 253:main.c        ****     Sensors 	sens;
+ 254:main.c        ****     uint8_t     i=0;
+ 255:main.c        ****     
+ 256:main.c        ****     while(1){
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 8
+
+
+ 257:main.c        ****         //AMUX loop, we're pulling data in this order
+ 258:main.c        ****         for (i = 0; i < 3; i++){
+ 259:main.c        ****             AMUX_Select(i);
+ 260:main.c        ****             CyDelayUs(15);
+ 261:main.c        ****             SARADC_StartConvert();
+ 262:main.c        ****             SARADC_IsEndConversion(SARADC_WAIT_FOR_RESULT);
+ 263:main.c        ****             if (i == 0) {
+ 264:main.c        ****                 sens.data[i] = SARADC_GetResult16();
+ 265:main.c        ****             } 
+ 266:main.c        ****             else if ((i == 1 ) | (i == 2)){
+ 267:main.c        ****                 sens.data[i] = GetTemp();
+ 268:main.c        ****             }            
+ 269:main.c        ****         }
+ 270:main.c        ****         
+ 271:main.c        ****         // Convert PhotoResistor to high low sensor > 105 means its bright out so we set the variab
+ 272:main.c        ****         if (sens.data[0] > 105){
+ 273:main.c        ****             sens.data[0] = 0;
+ 274:main.c        ****         }else{
+ 275:main.c        ****             sens.data[0] = 1;
+ 276:main.c        ****         }
+ 277:main.c        ****         
+ 278:main.c        ****         //clean temperature data
+ 279:main.c        ****         for (i = 0; i < 2; i++){  
+ 280:main.c        ****             sens.data[i+1] = log(10000.0 * (256.0/sens.data[i+1] - 1));
+ 281:main.c        ****             sens.data[i+1] = 1 / (0.001129148 + (0.000234125 + (0.0000000876741 * sens.data[i+1] * 
+ 282:main.c        ****             sens.data[i+1] = sens.data[i+1] - 273.15;  
+ 283:main.c        ****         }
+ 284:main.c        ****         
+ 285:main.c        ****        while (xQueueSendToBack(xQueue, &sens, pdMS_TO_TICKS(10)) != pdPASS){};
+ 286:main.c        ****        vTaskDelay( pdMS_TO_TICKS(2000)); //Delay for 20ms
+ 287:main.c        ****        }
+ 288:main.c        **** }
+ 289:main.c        **** 
+ 290:main.c        **** 
+ 291:main.c        **** //Show our data locally via message/buffer on LCD screen
+ 292:main.c        **** void vDisplayData(void *pvParameters)
+ 293:main.c        **** {
+ 143              		.loc 1 293 0
+ 144              		.cfi_startproc
+ 145              		@ args = 0, pretend = 0, frame = 48
+ 146              		@ frame_needed = 0, uses_anonymous_args = 0
+ 147              	.LVL7:
+ 148 0000 30B5     		push	{r4, r5, lr}
+ 149              		.cfi_def_cfa_offset 12
+ 150              		.cfi_offset 4, -12
+ 151              		.cfi_offset 5, -8
+ 152              		.cfi_offset 14, -4
+ 153 0002 8DB0     		sub	sp, sp, #52
+ 154              		.cfi_def_cfa_offset 64
+ 155              	.LVL8:
+ 156              	.L13:
+ 294:main.c        ****    char        str[5];
+ 295:main.c        ****    Sensors      sens;
+ 296:main.c        ****     
+ 297:main.c        ****     while(1){
+ 298:main.c        ****         if (xQueueReceive(xQueue, &sens, 0) == pdPASS){
+ 157              		.loc 1 298 0
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 9
+
+
+ 158 0004 0022     		movs	r2, #0
+ 159 0006 6946     		mov	r1, sp
+ 160 0008 244B     		ldr	r3, .L23
+ 161 000a 186A     		ldr	r0, [r3, #32]
+ 162 000c FFF7FEFF 		bl	xQueueReceive
+ 163              	.LVL9:
+ 164 0010 0128     		cmp	r0, #1
+ 165 0012 F7D1     		bne	.L13
+ 299:main.c        ****             
+ 300:main.c        ****             if (sens.data[0] == 1){
+ 166              		.loc 1 300 0
+ 167 0014 DDE90245 		ldrd	r4, [sp, #8]
+ 168 0018 0022     		movs	r2, #0
+ 169 001a 214B     		ldr	r3, .L23+4
+ 170 001c 2046     		mov	r0, r4
+ 171 001e 2946     		mov	r1, r5
+ 172 0020 FFF7FEFF 		bl	__aeabi_dcmpeq
+ 173              	.LVL10:
+ 174 0024 60B1     		cbz	r0, .L21
+ 301:main.c        ****                 LCD_Position(0,0);
+ 175              		.loc 1 301 0
+ 176 0026 0021     		movs	r1, #0
+ 177 0028 0846     		mov	r0, r1
+ 178 002a FFF7FEFF 		bl	LCD_Position
+ 179              	.LVL11:
+ 302:main.c        ****                 sprintf(str, "No Sunlight");
+ 180              		.loc 1 302 0
+ 181 002e 0AAB     		add	r3, sp, #40
+ 182 0030 1C4A     		ldr	r2, .L23+8
+ 183 0032 07CA     		ldmia	r2, {r0, r1, r2}
+ 184 0034 83E80700 		stmia	r3, {r0, r1, r2}
+ 303:main.c        ****                 LCD_PrintString(str);
+ 185              		.loc 1 303 0
+ 186 0038 1846     		mov	r0, r3
+ 187 003a FFF7FEFF 		bl	LCD_PrintString
+ 188              	.LVL12:
+ 189 003e 12E0     		b	.L16
+ 190              	.L21:
+ 304:main.c        ****             }
+ 305:main.c        ****             else if (sens.data[0] == 0){
+ 191              		.loc 1 305 0
+ 192 0040 0022     		movs	r2, #0
+ 193 0042 0023     		movs	r3, #0
+ 194 0044 2046     		mov	r0, r4
+ 195 0046 2946     		mov	r1, r5
+ 196 0048 FFF7FEFF 		bl	__aeabi_dcmpeq
+ 197              	.LVL13:
+ 198 004c 58B1     		cbz	r0, .L16
+ 306:main.c        ****                 LCD_Position(0,0);
+ 199              		.loc 1 306 0
+ 200 004e 0021     		movs	r1, #0
+ 201 0050 0846     		mov	r0, r1
+ 202 0052 FFF7FEFF 		bl	LCD_Position
+ 203              	.LVL14:
+ 307:main.c        ****                 sprintf(str, "Sunlight OK");
+ 204              		.loc 1 307 0
+ 205 0056 0AAB     		add	r3, sp, #40
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 10
+
+
+ 206 0058 134A     		ldr	r2, .L23+12
+ 207 005a 07CA     		ldmia	r2, {r0, r1, r2}
+ 208 005c 83E80700 		stmia	r3, {r0, r1, r2}
+ 308:main.c        ****                 LCD_PrintString(str);
+ 209              		.loc 1 308 0
+ 210 0060 1846     		mov	r0, r3
+ 211 0062 FFF7FEFF 		bl	LCD_PrintString
+ 212              	.LVL15:
+ 213              	.L16:
+ 309:main.c        ****             }
+ 310:main.c        ****             sprintf(str, "OT%3.0f", sens.data[2]);
+ 214              		.loc 1 310 0
+ 215 0066 DDE90623 		ldrd	r2, [sp, #24]
+ 216 006a 1049     		ldr	r1, .L23+16
+ 217 006c 0AA8     		add	r0, sp, #40
+ 218 006e FFF7FEFF 		bl	sprintf
+ 219              	.LVL16:
+ 311:main.c        ****             LCD_Position(1,0);
+ 220              		.loc 1 311 0
+ 221 0072 0021     		movs	r1, #0
+ 222 0074 0120     		movs	r0, #1
+ 223 0076 FFF7FEFF 		bl	LCD_Position
+ 224              	.LVL17:
+ 312:main.c        ****             LCD_PrintString(str);
+ 225              		.loc 1 312 0
+ 226 007a 0AA8     		add	r0, sp, #40
+ 227 007c FFF7FEFF 		bl	LCD_PrintString
+ 228              	.LVL18:
+ 313:main.c        ****             sprintf(str, "IT%2.0f", sens.data[1]);
+ 229              		.loc 1 313 0
+ 230 0080 DDE90423 		ldrd	r2, [sp, #16]
+ 231 0084 0A49     		ldr	r1, .L23+20
+ 232 0086 0AA8     		add	r0, sp, #40
+ 233 0088 FFF7FEFF 		bl	sprintf
+ 234              	.LVL19:
+ 314:main.c        ****             LCD_Position(1,7);
+ 235              		.loc 1 314 0
+ 236 008c 0721     		movs	r1, #7
+ 237 008e 0120     		movs	r0, #1
+ 238 0090 FFF7FEFF 		bl	LCD_Position
+ 239              	.LVL20:
+ 315:main.c        ****             LCD_PrintString(str);
+ 240              		.loc 1 315 0
+ 241 0094 0AA8     		add	r0, sp, #40
+ 242 0096 FFF7FEFF 		bl	LCD_PrintString
+ 243              	.LVL21:
+ 244 009a B3E7     		b	.L13
+ 245              	.L24:
+ 246              		.align	2
+ 247              	.L23:
+ 248 009c 00000000 		.word	.LANCHOR0
+ 249 00a0 0000F03F 		.word	1072693248
+ 250 00a4 00000000 		.word	.LC0
+ 251 00a8 0C000000 		.word	.LC1
+ 252 00ac 18000000 		.word	.LC2
+ 253 00b0 20000000 		.word	.LC3
+ 254              		.cfi_endproc
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 11
+
+
+ 255              	.LFE73:
+ 256              		.size	vDisplayData, .-vDisplayData
+ 257              		.section	.text.vUARTComm,"ax",%progbits
+ 258              		.align	2
+ 259              		.global	vUARTComm
+ 260              		.thumb
+ 261              		.thumb_func
+ 262              		.type	vUARTComm, %function
+ 263              	vUARTComm:
+ 264              	.LFB74:
+ 316:main.c        ****         
+ 317:main.c        ****         }
+ 318:main.c        ****         
+ 319:main.c        **** }
+ 320:main.c        ****     vTaskDelay(pdMS_TO_TICKS(1000)); //delay for 500ms
+ 321:main.c        **** }
+ 322:main.c        **** 
+ 323:main.c        **** //send or recieve UART data
+ 324:main.c        **** void vUARTComm(void *pvParameters)
+ 325:main.c        **** {
+ 265              		.loc 1 325 0
+ 266              		.cfi_startproc
+ 267              		@ args = 0, pretend = 0, frame = 72
+ 268              		@ frame_needed = 0, uses_anonymous_args = 0
+ 269              	.LVL22:
+ 270 0000 30B5     		push	{r4, r5, lr}
+ 271              		.cfi_def_cfa_offset 12
+ 272              		.cfi_offset 4, -12
+ 273              		.cfi_offset 5, -8
+ 274              		.cfi_offset 14, -4
+ 275 0002 97B0     		sub	sp, sp, #92
+ 276              		.cfi_def_cfa_offset 104
+ 277              	.LVL23:
+ 278              	.L26:
+ 326:main.c        ****    char        str[30];
+ 327:main.c        ****    Sensors      sens;
+ 328:main.c        ****     
+ 329:main.c        ****     while(1){
+ 330:main.c        ****         if (xQueueReceive(xQueue, &sens, 0) == pdPASS){
+ 279              		.loc 1 330 0
+ 280 0004 0022     		movs	r2, #0
+ 281 0006 04A9     		add	r1, sp, #16
+ 282 0008 1D4B     		ldr	r3, .L36
+ 283 000a 186A     		ldr	r0, [r3, #32]
+ 284 000c FFF7FEFF 		bl	xQueueReceive
+ 285              	.LVL24:
+ 286 0010 0128     		cmp	r0, #1
+ 287 0012 F7D1     		bne	.L26
+ 331:main.c        ****             if (sens.data[0] == 1){
+ 288              		.loc 1 331 0
+ 289 0014 DDE90645 		ldrd	r4, [sp, #24]
+ 290 0018 0022     		movs	r2, #0
+ 291 001a 1A4B     		ldr	r3, .L36+4
+ 292 001c 2046     		mov	r0, r4
+ 293 001e 2946     		mov	r1, r5
+ 294 0020 FFF7FEFF 		bl	__aeabi_dcmpeq
+ 295              	.LVL25:
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 12
+
+
+ 296 0024 28B1     		cbz	r0, .L34
+ 332:main.c        ****                 sprintf(str, "+PRESON;");
+ 297              		.loc 1 332 0
+ 298 0026 184A     		ldr	r2, .L36+8
+ 299 0028 0EAB     		add	r3, sp, #56
+ 300 002a 07CA     		ldmia	r2, {r0, r1, r2}
+ 301 002c 03C3     		stmia	r3!, {r0, r1}
+ 302 002e 1A70     		strb	r2, [r3]
+ 303 0030 0BE0     		b	.L29
+ 304              	.L34:
+ 333:main.c        ****             }
+ 334:main.c        ****             else if (sens.data[0] == 0){
+ 305              		.loc 1 334 0
+ 306 0032 0022     		movs	r2, #0
+ 307 0034 0023     		movs	r3, #0
+ 308 0036 2046     		mov	r0, r4
+ 309 0038 2946     		mov	r1, r5
+ 310 003a FFF7FEFF 		bl	__aeabi_dcmpeq
+ 311              	.LVL26:
+ 312 003e 20B1     		cbz	r0, .L29
+ 335:main.c        ****                 sprintf(str, "+PRESOFF;");
+ 313              		.loc 1 335 0
+ 314 0040 124A     		ldr	r2, .L36+12
+ 315 0042 0EAB     		add	r3, sp, #56
+ 316 0044 07CA     		ldmia	r2, {r0, r1, r2}
+ 317 0046 03C3     		stmia	r3!, {r0, r1}
+ 318 0048 1A80     		strh	r2, [r3]	@ movhi
+ 319              	.L29:
+ 336:main.c        ****             }
+ 337:main.c        ****             sprintf(str, "%s+OTEMP:%3.0f;+INTEMP:%2.0f;", str, sens.data[2],sens.data[1]);
+ 320              		.loc 1 337 0
+ 321 004a DDE90823 		ldrd	r2, [sp, #32]
+ 322 004e CDE90223 		strd	r2, [sp, #8]
+ 323 0052 DDE90A23 		ldrd	r2, [sp, #40]
+ 324 0056 CDE90023 		strd	r2, [sp]
+ 325 005a 0EAA     		add	r2, sp, #56
+ 326 005c 0C49     		ldr	r1, .L36+16
+ 327 005e 1046     		mov	r0, r2
+ 328 0060 FFF7FEFF 		bl	sprintf
+ 329              	.LVL27:
+ 338:main.c        ****             UART_PutString(str);
+ 330              		.loc 1 338 0
+ 331 0064 0EA8     		add	r0, sp, #56
+ 332 0066 FFF7FEFF 		bl	UART_PutString
+ 333              	.LVL28:
+ 339:main.c        ****             sprintf(str, "\r\n");
+ 334              		.loc 1 339 0
+ 335 006a 0A4B     		ldr	r3, .L36+20
+ 336 006c 1B68     		ldr	r3, [r3]
+ 337 006e ADF83830 		strh	r3, [sp, #56]	@ movhi
+ 338 0072 1B0C     		lsrs	r3, r3, #16
+ 339 0074 8DF83A30 		strb	r3, [sp, #58]
+ 340:main.c        ****             UART_PutString(str);
+ 340              		.loc 1 340 0
+ 341 0078 0EA8     		add	r0, sp, #56
+ 342 007a FFF7FEFF 		bl	UART_PutString
+ 343              	.LVL29:
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 13
+
+
+ 344 007e C1E7     		b	.L26
+ 345              	.L37:
+ 346              		.align	2
+ 347              	.L36:
+ 348 0080 00000000 		.word	.LANCHOR0
+ 349 0084 0000F03F 		.word	1072693248
+ 350 0088 28000000 		.word	.LC4
+ 351 008c 34000000 		.word	.LC5
+ 352 0090 40000000 		.word	.LC6
+ 353 0094 60000000 		.word	.LC7
+ 354              		.cfi_endproc
+ 355              	.LFE74:
+ 356              		.size	vUARTComm, .-vUARTComm
+ 357              		.section	.text.vTasks,"ax",%progbits
+ 358              		.align	2
+ 359              		.global	vTasks
+ 360              		.thumb
+ 361              		.thumb_func
+ 362              		.type	vTasks, %function
+ 363              	vTasks:
+ 364              	.LFB75:
+ 341:main.c        ****             
+ 342:main.c        ****         }
+ 343:main.c        ****         
+ 344:main.c        **** }
+ 345:main.c        ****     vTaskDelay(pdMS_TO_TICKS(1000)); //delay for 500ms
+ 346:main.c        **** }
+ 347:main.c        **** 
+ 348:main.c        **** 
+ 349:main.c        **** 
+ 350:main.c        **** //we're going to perform tasks based on what we get from UART
+ 351:main.c        **** void vTasks(void *pvParameters)
+ 352:main.c        **** {
+ 365              		.loc 1 352 0
+ 366              		.cfi_startproc
+ 367              		@ args = 0, pretend = 0, frame = 24
+ 368              		@ frame_needed = 0, uses_anonymous_args = 0
+ 369              	.LVL30:
+ 370 0000 10B5     		push	{r4, lr}
+ 371              		.cfi_def_cfa_offset 8
+ 372              		.cfi_offset 4, -8
+ 373              		.cfi_offset 14, -4
+ 374 0002 86B0     		sub	sp, sp, #24
+ 375              		.cfi_def_cfa_offset 32
+ 376 0004 0446     		mov	r4, r0
+ 377              	.LVL31:
+ 378              	.L39:
+ 353:main.c        **** 	MessageBufferHandle_t   xMesgBuf;
+ 354:main.c        ****     char                    buf[20];
+ 355:main.c        ****     char                    str[60];
+ 356:main.c        ****     size_t                  xReceivedBytes;
+ 357:main.c        ****     
+ 358:main.c        ****     
+ 359:main.c        ****    xMesgBuf = pvParameters;
+ 360:main.c        ****     
+ 361:main.c        ****     while(1){
+ 362:main.c        ****         xReceivedBytes = xMessageBufferReceive(xMesgBuf, buf, sizeof(buf), pdMS_TO_TICKS(20));
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 14
+
+
+ 379              		.loc 1 362 0
+ 380 0006 1423     		movs	r3, #20
+ 381 0008 1A46     		mov	r2, r3
+ 382 000a 01A9     		add	r1, sp, #4
+ 383 000c 2046     		mov	r0, r4
+ 384 000e FFF7FEFF 		bl	xStreamBufferReceive
+ 385              	.LVL32:
+ 363:main.c        ****         if (xReceivedBytes > 0 ){
+ 386              		.loc 1 363 0
+ 387 0012 0028     		cmp	r0, #0
+ 388 0014 F7D0     		beq	.L39
+ 364:main.c        ****             //CHECK LED COMMAND
+ 365:main.c        ****             if (strcmp(buf, "LON") == 0) {
+ 389              		.loc 1 365 0
+ 390 0016 2449     		ldr	r1, .L50
+ 391 0018 01A8     		add	r0, sp, #4
+ 392              	.LVL33:
+ 393 001a FFF7FEFF 		bl	strcmp
+ 394              	.LVL34:
+ 395 001e 18B9     		cbnz	r0, .L40
+ 366:main.c        ****                 //Testing UART
+ 367:main.c        ****                 //UART_PutString("Turning on LED");
+ 368:main.c        ****                 //Turn on LED
+ 369:main.c        ****                 UVLight_Write(1);
+ 396              		.loc 1 369 0
+ 397 0020 0120     		movs	r0, #1
+ 398 0022 FFF7FEFF 		bl	UVLight_Write
+ 399              	.LVL35:
+ 400 0026 06E0     		b	.L41
+ 401              	.L40:
+ 370:main.c        ****                 
+ 371:main.c        ****             } else if (strcmp(buf, "LOFF") == 0){
+ 402              		.loc 1 371 0
+ 403 0028 2049     		ldr	r1, .L50+4
+ 404 002a 01A8     		add	r0, sp, #4
+ 405 002c FFF7FEFF 		bl	strcmp
+ 406              	.LVL36:
+ 407 0030 08B9     		cbnz	r0, .L41
+ 372:main.c        ****                 //Testing UART
+ 373:main.c        ****                 //UART_PutString("Turning off LED");
+ 374:main.c        ****                 //Turn off LED
+ 375:main.c        ****                 UVLight_Write(0);                
+ 408              		.loc 1 375 0
+ 409 0032 FFF7FEFF 		bl	UVLight_Write
+ 410              	.LVL37:
+ 411              	.L41:
+ 376:main.c        ****                 
+ 377:main.c        ****             }
+ 378:main.c        ****             
+ 379:main.c        ****             //Window Tasks
+ 380:main.c        ****             if (strcmp(buf, "WOPEN") == 0){
+ 412              		.loc 1 380 0
+ 413 0036 1E49     		ldr	r1, .L50+8
+ 414 0038 01A8     		add	r0, sp, #4
+ 415 003a FFF7FEFF 		bl	strcmp
+ 416              	.LVL38:
+ 417 003e 20B9     		cbnz	r0, .L42
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 15
+
+
+ 381:main.c        ****                 //Testing UART
+ 382:main.c        ****                 //UART_PutString("Opening Window");
+ 383:main.c        ****                 //OPEN Window
+ 384:main.c        ****                 SERVOPWM_WriteCompare(18000);
+ 418              		.loc 1 384 0
+ 419 0040 44F25060 		movw	r0, #18000
+ 420 0044 FFF7FEFF 		bl	SERVOPWM_WriteCompare
+ 421              	.LVL39:
+ 422 0048 08E0     		b	.L43
+ 423              	.L42:
+ 385:main.c        ****                 
+ 386:main.c        ****                 
+ 387:main.c        ****             } else if (strcmp (buf, "WCLOSE") == 0){
+ 424              		.loc 1 387 0
+ 425 004a 1A49     		ldr	r1, .L50+12
+ 426 004c 01A8     		add	r0, sp, #4
+ 427 004e FFF7FEFF 		bl	strcmp
+ 428              	.LVL40:
+ 429 0052 18B9     		cbnz	r0, .L43
+ 388:main.c        ****                 //Testing UART
+ 389:main.c        ****                 //UART_PutString("Closing Window\n");
+ 390:main.c        ****                 //OPEN Window
+ 391:main.c        ****                  SERVOPWM_WriteCompare(19000);
+ 430              		.loc 1 391 0
+ 431 0054 44F63820 		movw	r0, #19000
+ 432 0058 FFF7FEFF 		bl	SERVOPWM_WriteCompare
+ 433              	.LVL41:
+ 434              	.L43:
+ 392:main.c        ****                     
+ 393:main.c        ****                     
+ 394:main.c        ****             }
+ 395:main.c        ****             
+ 396:main.c        ****             //Fan Tasks
+ 397:main.c        ****             if (strcmp(buf, "FON") == 0) {
+ 435              		.loc 1 397 0
+ 436 005c 1649     		ldr	r1, .L50+16
+ 437 005e 01A8     		add	r0, sp, #4
+ 438 0060 FFF7FEFF 		bl	strcmp
+ 439              	.LVL42:
+ 440 0064 18B9     		cbnz	r0, .L44
+ 398:main.c        ****                 //Testing UART
+ 399:main.c        ****                 //UART_PutString("Turning on FAN\n");
+ 400:main.c        ****                 //Fan on
+ 401:main.c        ****                 Fan_Write(1);
+ 441              		.loc 1 401 0
+ 442 0066 0120     		movs	r0, #1
+ 443 0068 FFF7FEFF 		bl	Fan_Write
+ 444              	.LVL43:
+ 445 006c 06E0     		b	.L45
+ 446              	.L44:
+ 402:main.c        ****             } else if (strcmp (buf, "FOFF") == 0) {
+ 447              		.loc 1 402 0
+ 448 006e 1349     		ldr	r1, .L50+20
+ 449 0070 01A8     		add	r0, sp, #4
+ 450 0072 FFF7FEFF 		bl	strcmp
+ 451              	.LVL44:
+ 452 0076 08B9     		cbnz	r0, .L45
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 16
+
+
+ 403:main.c        ****                 //Testing UART
+ 404:main.c        ****                 //UART_PutString("Turning off FAN\n");
+ 405:main.c        ****                 //Fan off
+ 406:main.c        ****                 Fan_Write(0);
+ 453              		.loc 1 406 0
+ 454 0078 FFF7FEFF 		bl	Fan_Write
+ 455              	.LVL45:
+ 456              	.L45:
+ 407:main.c        ****             }
+ 408:main.c        ****             
+ 409:main.c        ****             //Heatpad Tasks
+ 410:main.c        ****             if (strcmp(buf, "HON") == 0){
+ 457              		.loc 1 410 0
+ 458 007c 1049     		ldr	r1, .L50+24
+ 459 007e 01A8     		add	r0, sp, #4
+ 460 0080 FFF7FEFF 		bl	strcmp
+ 461              	.LVL46:
+ 462 0084 18B9     		cbnz	r0, .L46
+ 411:main.c        ****                 //Testing UART
+ 412:main.c        ****                 //UART_PutString("Heating up!\n");
+ 413:main.c        ****                 //Turn on Heat Pad
+ 414:main.c        ****                 HeatPad_Write(1);
+ 463              		.loc 1 414 0
+ 464 0086 0120     		movs	r0, #1
+ 465 0088 FFF7FEFF 		bl	HeatPad_Write
+ 466              	.LVL47:
+ 467 008c 06E0     		b	.L47
+ 468              	.L46:
+ 415:main.c        ****             } else if (strcmp (buf, "HOFF") == 0){
+ 469              		.loc 1 415 0
+ 470 008e 0D49     		ldr	r1, .L50+28
+ 471 0090 01A8     		add	r0, sp, #4
+ 472 0092 FFF7FEFF 		bl	strcmp
+ 473              	.LVL48:
+ 474 0096 08B9     		cbnz	r0, .L47
+ 416:main.c        ****                 //Testing UART
+ 417:main.c        ****                 //UART_PutString("Heating off!\n");
+ 418:main.c        ****                 //Turn off Heat Pad
+ 419:main.c        ****                 HeatPad_Write(0);
+ 475              		.loc 1 419 0
+ 476 0098 FFF7FEFF 		bl	HeatPad_Write
+ 477              	.LVL49:
+ 478              	.L47:
+ 420:main.c        ****             }
+ 421:main.c        ****            
+ 422:main.c        ****         vTaskDelay(pdMS_TO_TICKS(1000));                
+ 479              		.loc 1 422 0
+ 480 009c 4FF47A70 		mov	r0, #1000
+ 481 00a0 FFF7FEFF 		bl	vTaskDelay
+ 482              	.LVL50:
+ 483 00a4 AFE7     		b	.L39
+ 484              	.L51:
+ 485 00a6 00BF     		.align	2
+ 486              	.L50:
+ 487 00a8 64000000 		.word	.LC8
+ 488 00ac 68000000 		.word	.LC9
+ 489 00b0 70000000 		.word	.LC10
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 17
+
+
+ 490 00b4 78000000 		.word	.LC11
+ 491 00b8 80000000 		.word	.LC12
+ 492 00bc 84000000 		.word	.LC13
+ 493 00c0 8C000000 		.word	.LC14
+ 494 00c4 90000000 		.word	.LC15
+ 495              		.cfi_endproc
+ 496              	.LFE75:
+ 497              		.size	vTasks, .-vTasks
+ 498              		.section	.text.MyPSOCSetup,"ax",%progbits
+ 499              		.align	2
+ 500              		.global	MyPSOCSetup
+ 501              		.thumb
+ 502              		.thumb_func
+ 503              		.type	MyPSOCSetup, %function
+ 504              	MyPSOCSetup:
+ 505              	.LFB70:
+ 187:main.c        ****     LCD_Start();
+ 506              		.loc 1 187 0
+ 507              		.cfi_startproc
+ 508              		@ args = 0, pretend = 0, frame = 0
+ 509              		@ frame_needed = 0, uses_anonymous_args = 0
+ 510 0000 08B5     		push	{r3, lr}
+ 511              		.cfi_def_cfa_offset 8
+ 512              		.cfi_offset 3, -8
+ 513              		.cfi_offset 14, -4
+ 188:main.c        ****     LCD_ClearDisplay();
+ 514              		.loc 1 188 0
+ 515 0002 FFF7FEFF 		bl	LCD_Start
+ 516              	.LVL51:
+ 189:main.c        ****     LCD_Position(0,0);
+ 517              		.loc 1 189 0
+ 518 0006 0120     		movs	r0, #1
+ 519 0008 FFF7FEFF 		bl	LCD_WriteControl
+ 520              	.LVL52:
+ 190:main.c        ****     LCD_PrintString("EE4450 FREERTOS");
+ 521              		.loc 1 190 0
+ 522 000c 0021     		movs	r1, #0
+ 523 000e 0846     		mov	r0, r1
+ 524 0010 FFF7FEFF 		bl	LCD_Position
+ 525              	.LVL53:
+ 191:main.c        ****     LCD_ClearDisplay();
+ 526              		.loc 1 191 0
+ 527 0014 0948     		ldr	r0, .L54
+ 528 0016 FFF7FEFF 		bl	LCD_PrintString
+ 529              	.LVL54:
+ 192:main.c        ****     CyDelay(1000);
+ 530              		.loc 1 192 0
+ 531 001a 0120     		movs	r0, #1
+ 532 001c FFF7FEFF 		bl	LCD_WriteControl
+ 533              	.LVL55:
+ 193:main.c        ****     
+ 534              		.loc 1 193 0
+ 535 0020 4FF47A70 		mov	r0, #1000
+ 536 0024 FFF7FEFF 		bl	CyDelay
+ 537              	.LVL56:
+ 195:main.c        ****     UART_Start();
+ 538              		.loc 1 195 0
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 18
+
+
+ 539 0028 0548     		ldr	r0, .L54+4
+ 540 002a FFF7FEFF 		bl	ISR_UART_StartEx
+ 541              	.LVL57:
+ 196:main.c        ****     UART_ClearRxBuffer();
+ 542              		.loc 1 196 0
+ 543 002e FFF7FEFF 		bl	UART_Start
+ 544              	.LVL58:
+ 197:main.c        ****     UART_ClearTxBuffer();
+ 545              		.loc 1 197 0
+ 546 0032 FFF7FEFF 		bl	UART_ClearRxBuffer
+ 547              	.LVL59:
+ 198:main.c        ****     //UART_PutString("Team 10 Greenhouse Final!");
+ 548              		.loc 1 198 0
+ 549 0036 FFF7FEFF 		bl	UART_ClearTxBuffer
+ 550              	.LVL60:
+ 551 003a 08BD     		pop	{r3, pc}
+ 552              	.L55:
+ 553              		.align	2
+ 554              	.L54:
+ 555 003c 98000000 		.word	.LC16
+ 556 0040 00000000 		.word	MyUartISR
+ 557              		.cfi_endproc
+ 558              	.LFE70:
+ 559              		.size	MyPSOCSetup, .-MyPSOCSetup
+ 560              		.section	.text.main,"ax",%progbits
+ 561              		.align	2
+ 562              		.global	main
+ 563              		.thumb
+ 564              		.thumb_func
+ 565              		.type	main, %function
+ 566              	main:
+ 567              	.LFB69:
+  94:main.c        ****     
+ 568              		.loc 1 94 0
+ 569              		.cfi_startproc
+ 570              		@ args = 0, pretend = 0, frame = 0
+ 571              		@ frame_needed = 0, uses_anonymous_args = 0
+ 572 0000 00B5     		push	{lr}
+ 573              		.cfi_def_cfa_offset 4
+ 574              		.cfi_offset 14, -4
+ 575 0002 83B0     		sub	sp, sp, #12
+ 576              		.cfi_def_cfa_offset 16
+ 101:main.c        ****     MyPSOCSetup();
+ 577              		.loc 1 101 0
+ 578 0004 FFF7FEFF 		bl	AMUX_Start
+ 579              	.LVL61:
+ 102:main.c        ****     SARADC_Start();
+ 580              		.loc 1 102 0
+ 581 0008 FFF7FEFF 		bl	MyPSOCSetup
+ 582              	.LVL62:
+ 103:main.c        ****     FreeRTOS_Init();
+ 583              		.loc 1 103 0
+ 584 000c FFF7FEFF 		bl	SARADC_Start
+ 585              	.LVL63:
+ 104:main.c        ****     SERVOPWM_Start();
+ 586              		.loc 1 104 0
+ 587 0010 FFF7FEFF 		bl	FreeRTOS_Init
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 19
+
+
+ 588              	.LVL64:
+ 105:main.c        ****     
+ 589              		.loc 1 105 0
+ 590 0014 FFF7FEFF 		bl	SERVOPWM_Start
+ 591              	.LVL65:
+ 108:main.c        ****     
+ 592              		.loc 1 108 0
+ 593 0018 0122     		movs	r2, #1
+ 594 001a 0021     		movs	r1, #0
+ 595 001c 6420     		movs	r0, #100
+ 596 001e FFF7FEFF 		bl	xStreamBufferGenericCreate
+ 597              	.LVL66:
+ 598 0022 364B     		ldr	r3, .L71
+ 599 0024 D861     		str	r0, [r3, #28]
+ 111:main.c        ****         // If message buffer was NOT created successfully
+ 600              		.loc 1 111 0
+ 601 0026 38B9     		cbnz	r0, .L57
+ 113:main.c        ****         LCD_PrintString("Can't create MsgBuf");
+ 602              		.loc 1 113 0
+ 603 0028 0021     		movs	r1, #0
+ 604 002a 0120     		movs	r0, #1
+ 605 002c FFF7FEFF 		bl	LCD_Position
+ 606              	.LVL67:
+ 114:main.c        ****         while(1);
+ 607              		.loc 1 114 0
+ 608 0030 3348     		ldr	r0, .L71+4
+ 609 0032 FFF7FEFF 		bl	LCD_PrintString
+ 610              	.LVL68:
+ 611              	.L58:
+ 612 0036 FEE7     		b	.L58
+ 613              	.L57:
+ 119:main.c        ****     if (xQueue == NULL) {
+ 614              		.loc 1 119 0
+ 615 0038 0022     		movs	r2, #0
+ 616 003a 2821     		movs	r1, #40
+ 617 003c 0820     		movs	r0, #8
+ 618 003e FFF7FEFF 		bl	xQueueGenericCreate
+ 619              	.LVL69:
+ 620 0042 2E4B     		ldr	r3, .L71
+ 621 0044 1862     		str	r0, [r3, #32]
+ 120:main.c        ****         LCD_Position(1,0);    
+ 622              		.loc 1 120 0
+ 623 0046 38B9     		cbnz	r0, .L59
+ 121:main.c        ****         LCD_PrintString("QUEUE ERROR");
+ 624              		.loc 1 121 0
+ 625 0048 0021     		movs	r1, #0
+ 626 004a 0120     		movs	r0, #1
+ 627 004c FFF7FEFF 		bl	LCD_Position
+ 628              	.LVL70:
+ 122:main.c        ****         while(1);
+ 629              		.loc 1 122 0
+ 630 0050 2C48     		ldr	r0, .L71+8
+ 631 0052 FFF7FEFF 		bl	LCD_PrintString
+ 632              	.LVL71:
+ 633              	.L60:
+ 634 0056 FEE7     		b	.L60
+ 635              	.L59:
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 20
+
+
+ 127:main.c        ****                             "LCD Task", 
+ 636              		.loc 1 127 0
+ 637 0058 0023     		movs	r3, #0
+ 638 005a 0193     		str	r3, [sp, #4]
+ 639 005c 0422     		movs	r2, #4
+ 640 005e 0092     		str	r2, [sp]
+ 641 0060 C822     		movs	r2, #200
+ 642 0062 2949     		ldr	r1, .L71+12
+ 643 0064 2948     		ldr	r0, .L71+16
+ 644 0066 FFF7FEFF 		bl	xTaskCreate
+ 645              	.LVL72:
+ 135:main.c        ****         LCD_Position(1,0);
+ 646              		.loc 1 135 0
+ 647 006a 0128     		cmp	r0, #1
+ 648 006c 07D0     		beq	.L61
+ 136:main.c        ****         LCD_PrintString("Cannot create Task!");
+ 649              		.loc 1 136 0
+ 650 006e 0021     		movs	r1, #0
+ 651 0070 0120     		movs	r0, #1
+ 652              	.LVL73:
+ 653 0072 FFF7FEFF 		bl	LCD_Position
+ 654              	.LVL74:
+ 137:main.c        ****         while(1){};
+ 655              		.loc 1 137 0
+ 656 0076 2648     		ldr	r0, .L71+20
+ 657 0078 FFF7FEFF 		bl	LCD_PrintString
+ 658              	.LVL75:
+ 659              	.L62:
+ 660 007c FEE7     		b	.L62
+ 661              	.LVL76:
+ 662              	.L61:
+ 140:main.c        ****                             "Show Readings", 
+ 663              		.loc 1 140 0
+ 664 007e 0023     		movs	r3, #0
+ 665 0080 0193     		str	r3, [sp, #4]
+ 666 0082 0422     		movs	r2, #4
+ 667 0084 0092     		str	r2, [sp]
+ 668 0086 C822     		movs	r2, #200
+ 669 0088 2249     		ldr	r1, .L71+24
+ 670 008a 2348     		ldr	r0, .L71+28
+ 671              	.LVL77:
+ 672 008c FFF7FEFF 		bl	xTaskCreate
+ 673              	.LVL78:
+ 147:main.c        ****         LCD_Position(1,0);
+ 674              		.loc 1 147 0
+ 675 0090 0128     		cmp	r0, #1
+ 676 0092 07D0     		beq	.L63
+ 148:main.c        ****         LCD_PrintString("Cannot create Task!");
+ 677              		.loc 1 148 0
+ 678 0094 0021     		movs	r1, #0
+ 679 0096 0120     		movs	r0, #1
+ 680              	.LVL79:
+ 681 0098 FFF7FEFF 		bl	LCD_Position
+ 682              	.LVL80:
+ 149:main.c        ****         while(1){};
+ 683              		.loc 1 149 0
+ 684 009c 1C48     		ldr	r0, .L71+20
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 21
+
+
+ 685 009e FFF7FEFF 		bl	LCD_PrintString
+ 686              	.LVL81:
+ 687              	.L64:
+ 688 00a2 FEE7     		b	.L64
+ 689              	.LVL82:
+ 690              	.L63:
+ 153:main.c        ****                             "UART SynC", 
+ 691              		.loc 1 153 0
+ 692 00a4 0023     		movs	r3, #0
+ 693 00a6 0193     		str	r3, [sp, #4]
+ 694 00a8 0422     		movs	r2, #4
+ 695 00aa 0092     		str	r2, [sp]
+ 696 00ac C822     		movs	r2, #200
+ 697 00ae 1B49     		ldr	r1, .L71+32
+ 698 00b0 1B48     		ldr	r0, .L71+36
+ 699              	.LVL83:
+ 700 00b2 FFF7FEFF 		bl	xTaskCreate
+ 701              	.LVL84:
+ 160:main.c        ****         LCD_Position(1,0);
+ 702              		.loc 1 160 0
+ 703 00b6 0128     		cmp	r0, #1
+ 704 00b8 07D0     		beq	.L65
+ 161:main.c        ****         LCD_PrintString("Cannot create Task!");
+ 705              		.loc 1 161 0
+ 706 00ba 0021     		movs	r1, #0
+ 707 00bc 0120     		movs	r0, #1
+ 708              	.LVL85:
+ 709 00be FFF7FEFF 		bl	LCD_Position
+ 710              	.LVL86:
+ 162:main.c        ****         while(1){};
+ 711              		.loc 1 162 0
+ 712 00c2 1348     		ldr	r0, .L71+20
+ 713 00c4 FFF7FEFF 		bl	LCD_PrintString
+ 714              	.LVL87:
+ 715              	.L66:
+ 716 00c8 FEE7     		b	.L66
+ 717              	.LVL88:
+ 718              	.L65:
+ 166:main.c        ****                             "Adujusting Greenhouse", 
+ 719              		.loc 1 166 0
+ 720 00ca 0C4B     		ldr	r3, .L71
+ 721 00cc DB69     		ldr	r3, [r3, #28]
+ 722 00ce 0022     		movs	r2, #0
+ 723 00d0 0192     		str	r2, [sp, #4]
+ 724 00d2 0622     		movs	r2, #6
+ 725 00d4 0092     		str	r2, [sp]
+ 726 00d6 C822     		movs	r2, #200
+ 727 00d8 1249     		ldr	r1, .L71+40
+ 728 00da 1348     		ldr	r0, .L71+44
+ 729              	.LVL89:
+ 730 00dc FFF7FEFF 		bl	xTaskCreate
+ 731              	.LVL90:
+ 173:main.c        ****         LCD_Position(1,0);
+ 732              		.loc 1 173 0
+ 733 00e0 0128     		cmp	r0, #1
+ 734 00e2 07D0     		beq	.L67
+ 174:main.c        ****         LCD_PrintString("Cannot create Task!");
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 22
+
+
+ 735              		.loc 1 174 0
+ 736 00e4 0021     		movs	r1, #0
+ 737 00e6 0120     		movs	r0, #1
+ 738              	.LVL91:
+ 739 00e8 FFF7FEFF 		bl	LCD_Position
+ 740              	.LVL92:
+ 175:main.c        ****         while(1){};
+ 741              		.loc 1 175 0
+ 742 00ec 0848     		ldr	r0, .L71+20
+ 743 00ee FFF7FEFF 		bl	LCD_PrintString
+ 744              	.LVL93:
+ 745              	.L68:
+ 746 00f2 FEE7     		b	.L68
+ 747              	.LVL94:
+ 748              	.L67:
+ 179:main.c        ****     
+ 749              		.loc 1 179 0
+ 750 00f4 FFF7FEFF 		bl	vTaskStartScheduler
+ 751              	.LVL95:
+ 752              	.L69:
+ 753 00f8 FEE7     		b	.L69
+ 754              	.L72:
+ 755 00fa 00BF     		.align	2
+ 756              	.L71:
+ 757 00fc 00000000 		.word	.LANCHOR0
+ 758 0100 A8000000 		.word	.LC17
+ 759 0104 BC000000 		.word	.LC18
+ 760 0108 C8000000 		.word	.LC19
+ 761 010c 00000000 		.word	vGetData
+ 762 0110 D4000000 		.word	.LC20
+ 763 0114 E8000000 		.word	.LC21
+ 764 0118 00000000 		.word	vDisplayData
+ 765 011c F8000000 		.word	.LC22
+ 766 0120 00000000 		.word	vUARTComm
+ 767 0124 04010000 		.word	.LC23
+ 768 0128 00000000 		.word	vTasks
+ 769              		.cfi_endproc
+ 770              	.LFE69:
+ 771              		.size	main, .-main
+ 772              		.global	__aeabi_i2f
+ 773              		.global	__aeabi_fadd
+ 774              		.global	__aeabi_fdiv
+ 775              		.section	.text.GetTemp,"ax",%progbits
+ 776              		.align	2
+ 777              		.global	GetTemp
+ 778              		.thumb
+ 779              		.thumb_func
+ 780              		.type	GetTemp, %function
+ 781              	GetTemp:
+ 782              	.LFB76:
+ 423:main.c        ****                 
+ 424:main.c        ****         
+ 425:main.c        ****     }
+ 426:main.c        ****     }
+ 427:main.c        ****     
+ 428:main.c        ****     
+ 429:main.c        **** }
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 23
+
+
+ 430:main.c        **** //Our Calculate Temperature reading
+ 431:main.c        **** float GetTemp(void)
+ 432:main.c        **** {
+ 783              		.loc 1 432 0
+ 784              		.cfi_startproc
+ 785              		@ args = 0, pretend = 0, frame = 0
+ 786              		@ frame_needed = 0, uses_anonymous_args = 0
+ 787 0000 38B5     		push	{r3, r4, r5, lr}
+ 788              		.cfi_def_cfa_offset 16
+ 789              		.cfi_offset 3, -16
+ 790              		.cfi_offset 4, -12
+ 791              		.cfi_offset 5, -8
+ 792              		.cfi_offset 14, -4
+ 793              	.LVL96:
+ 433:main.c        ****     float   temp = 0;
+ 434:main.c        ****     int     i;
+ 435:main.c        ****     for (i=0; i < 10; i++) {
+ 794              		.loc 1 435 0
+ 795 0002 0024     		movs	r4, #0
+ 433:main.c        ****     float   temp = 0;
+ 796              		.loc 1 433 0
+ 797 0004 0025     		movs	r5, #0
+ 798              		.loc 1 435 0
+ 799 0006 09E0     		b	.L74
+ 800              	.LVL97:
+ 801              	.L75:
+ 436:main.c        ****         temp = (temp + SARADC_GetResult16());
+ 802              		.loc 1 436 0 discriminator 3
+ 803 0008 FFF7FEFF 		bl	SARADC_GetResult16
+ 804              	.LVL98:
+ 805 000c FFF7FEFF 		bl	__aeabi_i2f
+ 806              	.LVL99:
+ 807 0010 0146     		mov	r1, r0
+ 808 0012 2846     		mov	r0, r5
+ 809 0014 FFF7FEFF 		bl	__aeabi_fadd
+ 810              	.LVL100:
+ 811 0018 0546     		mov	r5, r0
+ 812              	.LVL101:
+ 435:main.c        ****         temp = (temp + SARADC_GetResult16());
+ 813              		.loc 1 435 0 discriminator 3
+ 814 001a 0134     		adds	r4, r4, #1
+ 815              	.LVL102:
+ 816              	.L74:
+ 435:main.c        ****         temp = (temp + SARADC_GetResult16());
+ 817              		.loc 1 435 0 is_stmt 0 discriminator 1
+ 818 001c 092C     		cmp	r4, #9
+ 819 001e F3DD     		ble	.L75
+ 437:main.c        ****     }
+ 438:main.c        ****     temp = temp / 10;
+ 820              		.loc 1 438 0 is_stmt 1
+ 821 0020 0249     		ldr	r1, .L77
+ 822 0022 2846     		mov	r0, r5
+ 823 0024 FFF7FEFF 		bl	__aeabi_fdiv
+ 824              	.LVL103:
+ 439:main.c        ****     
+ 440:main.c        ****     return temp;
+ 441:main.c        **** }   
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 24
+
+
+ 825              		.loc 1 441 0
+ 826 0028 38BD     		pop	{r3, r4, r5, pc}
+ 827              	.LVL104:
+ 828              	.L78:
+ 829 002a 00BF     		.align	2
+ 830              	.L77:
+ 831 002c 00002041 		.word	1092616192
+ 832              		.cfi_endproc
+ 833              	.LFE76:
+ 834              		.size	GetTemp, .-GetTemp
+ 835              		.global	__aeabi_i2d
+ 836              		.global	__aeabi_f2d
+ 837              		.global	__aeabi_dcmpgt
+ 838              		.global	__aeabi_ddiv
+ 839              		.global	__aeabi_dsub
+ 840              		.global	__aeabi_dmul
+ 841              		.global	__aeabi_dadd
+ 842              		.section	.text.vGetData,"ax",%progbits
+ 843              		.align	2
+ 844              		.global	vGetData
+ 845              		.thumb
+ 846              		.thumb_func
+ 847              		.type	vGetData, %function
+ 848              	vGetData:
+ 849              	.LFB72:
+ 252:main.c        ****     Sensors 	sens;
+ 850              		.loc 1 252 0
+ 851              		.cfi_startproc
+ 852              		@ args = 0, pretend = 0, frame = 40
+ 853              		@ frame_needed = 0, uses_anonymous_args = 0
+ 854              	.LVL105:
+ 855 0000 F0B5     		push	{r4, r5, r6, r7, lr}
+ 856              		.cfi_def_cfa_offset 20
+ 857              		.cfi_offset 4, -20
+ 858              		.cfi_offset 5, -16
+ 859              		.cfi_offset 6, -12
+ 860              		.cfi_offset 7, -8
+ 861              		.cfi_offset 14, -4
+ 862 0002 8BB0     		sub	sp, sp, #44
+ 863              		.cfi_def_cfa_offset 64
+ 864              	.LVL106:
+ 865              	.L90:
+ 258:main.c        ****             AMUX_Select(i);
+ 866              		.loc 1 258 0
+ 867 0004 0024     		movs	r4, #0
+ 868 0006 26E0     		b	.L80
+ 869              	.LVL107:
+ 870              	.L83:
+ 259:main.c        ****             CyDelayUs(15);
+ 871              		.loc 1 259 0
+ 872 0008 2046     		mov	r0, r4
+ 873 000a FFF7FEFF 		bl	AMUX_Select
+ 874              	.LVL108:
+ 260:main.c        ****             SARADC_StartConvert();
+ 875              		.loc 1 260 0
+ 876 000e 0F20     		movs	r0, #15
+ 877 0010 FFF7FEFF 		bl	CyDelayUs
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 25
+
+
+ 878              	.LVL109:
+ 261:main.c        ****             SARADC_IsEndConversion(SARADC_WAIT_FOR_RESULT);
+ 879              		.loc 1 261 0
+ 880 0014 FFF7FEFF 		bl	SARADC_StartConvert
+ 881              	.LVL110:
+ 262:main.c        ****             if (i == 0) {
+ 882              		.loc 1 262 0
+ 883 0018 0020     		movs	r0, #0
+ 884 001a FFF7FEFF 		bl	SARADC_IsEndConversion
+ 885              	.LVL111:
+ 263:main.c        ****                 sens.data[i] = SARADC_GetResult16();
+ 886              		.loc 1 263 0
+ 887 001e 54B9     		cbnz	r4, .L81
+ 264:main.c        ****             } 
+ 888              		.loc 1 264 0
+ 889 0020 FFF7FEFF 		bl	SARADC_GetResult16
+ 890              	.LVL112:
+ 891 0024 651C     		adds	r5, r4, #1
+ 892 0026 0AAB     		add	r3, sp, #40
+ 893 0028 03EBC505 		add	r5, r3, r5, lsl #3
+ 894 002c FFF7FEFF 		bl	__aeabi_i2d
+ 895              	.LVL113:
+ 896 0030 45E90A01 		strd	r0, [r5, #-40]
+ 897 0034 0DE0     		b	.L82
+ 898              	.L81:
+ 266:main.c        ****                 sens.data[i] = GetTemp();
+ 899              		.loc 1 266 0
+ 900 0036 631E     		subs	r3, r4, #1
+ 901 0038 DBB2     		uxtb	r3, r3
+ 902 003a 012B     		cmp	r3, #1
+ 903 003c 09D8     		bhi	.L82
+ 267:main.c        ****             }            
+ 904              		.loc 1 267 0
+ 905 003e FFF7FEFF 		bl	GetTemp
+ 906              	.LVL114:
+ 907 0042 651C     		adds	r5, r4, #1
+ 908 0044 0AAB     		add	r3, sp, #40
+ 909 0046 03EBC505 		add	r5, r3, r5, lsl #3
+ 910 004a FFF7FEFF 		bl	__aeabi_f2d
+ 911              	.LVL115:
+ 912 004e 45E90A01 		strd	r0, [r5, #-40]
+ 913              	.L82:
+ 258:main.c        ****             AMUX_Select(i);
+ 914              		.loc 1 258 0 discriminator 2
+ 915 0052 0134     		adds	r4, r4, #1
+ 916              	.LVL116:
+ 917 0054 E4B2     		uxtb	r4, r4
+ 918              	.LVL117:
+ 919              	.L80:
+ 258:main.c        ****             AMUX_Select(i);
+ 920              		.loc 1 258 0 is_stmt 0 discriminator 1
+ 921 0056 022C     		cmp	r4, #2
+ 922 0058 D6D9     		bls	.L83
+ 272:main.c        ****             sens.data[0] = 0;
+ 923              		.loc 1 272 0 is_stmt 1
+ 924 005a 0022     		movs	r2, #0
+ 925 005c 3C4B     		ldr	r3, .L94+40
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 26
+
+
+ 926 005e DDE90201 		ldrd	r0, [sp, #8]
+ 927 0062 FFF7FEFF 		bl	__aeabi_dcmpgt
+ 928              	.LVL118:
+ 929 0066 28B1     		cbz	r0, .L92
+ 273:main.c        ****         }else{
+ 930              		.loc 1 273 0
+ 931 0068 0022     		movs	r2, #0
+ 932 006a 0023     		movs	r3, #0
+ 933 006c CDE90223 		strd	r2, [sp, #8]
+ 934              	.L87:
+ 258:main.c        ****             AMUX_Select(i);
+ 935              		.loc 1 258 0 discriminator 1
+ 936 0070 0023     		movs	r3, #0
+ 937 0072 49E0     		b	.L86
+ 938              	.L92:
+ 275:main.c        ****         }
+ 939              		.loc 1 275 0
+ 940 0074 0022     		movs	r2, #0
+ 941 0076 374B     		ldr	r3, .L94+44
+ 942 0078 CDE90223 		strd	r2, [sp, #8]
+ 943 007c F8E7     		b	.L87
+ 944              	.LVL119:
+ 945              	.L88:
+ 280:main.c        ****             sens.data[i+1] = 1 / (0.001129148 + (0.000234125 + (0.0000000876741 * sens.data[i+1] * 
+ 946              		.loc 1 280 0 discriminator 3
+ 947 007e 5C1C     		adds	r4, r3, #1
+ 948 0080 9D1C     		adds	r5, r3, #2
+ 949 0082 0AAB     		add	r3, sp, #40
+ 950              	.LVL120:
+ 951 0084 03EBC505 		add	r5, r3, r5, lsl #3
+ 952 0088 55E90A23 		ldrd	r2, [r5, #-40]
+ 953 008c 0020     		movs	r0, #0
+ 954 008e 3249     		ldr	r1, .L94+48
+ 955 0090 FFF7FEFF 		bl	__aeabi_ddiv
+ 956              	.LVL121:
+ 957 0094 0022     		movs	r2, #0
+ 958 0096 2F4B     		ldr	r3, .L94+44
+ 959 0098 FFF7FEFF 		bl	__aeabi_dsub
+ 960              	.LVL122:
+ 961 009c 22A3     		adr	r3, .L94
+ 962 009e D3E90023 		ldrd	r2, [r3]
+ 963 00a2 FFF7FEFF 		bl	__aeabi_dmul
+ 964              	.LVL123:
+ 965 00a6 FFF7FEFF 		bl	log
+ 966              	.LVL124:
+ 967 00aa 0646     		mov	r6, r0
+ 968 00ac 0F46     		mov	r7, r1
+ 969 00ae 45E90A67 		strd	r6, [r5, #-40]
+ 281:main.c        ****             sens.data[i+1] = sens.data[i+1] - 273.15;  
+ 970              		.loc 1 281 0 discriminator 3
+ 971 00b2 1FA3     		adr	r3, .L94+8
+ 972 00b4 D3E90023 		ldrd	r2, [r3]
+ 973 00b8 FFF7FEFF 		bl	__aeabi_dmul
+ 974              	.LVL125:
+ 975 00bc 0246     		mov	r2, r0
+ 976 00be 0B46     		mov	r3, r1
+ 977 00c0 3046     		mov	r0, r6
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 27
+
+
+ 978 00c2 3946     		mov	r1, r7
+ 979 00c4 FFF7FEFF 		bl	__aeabi_dmul
+ 980              	.LVL126:
+ 981 00c8 1BA3     		adr	r3, .L94+16
+ 982 00ca D3E90023 		ldrd	r2, [r3]
+ 983 00ce FFF7FEFF 		bl	__aeabi_dadd
+ 984              	.LVL127:
+ 985 00d2 0246     		mov	r2, r0
+ 986 00d4 0B46     		mov	r3, r1
+ 987 00d6 3046     		mov	r0, r6
+ 988 00d8 3946     		mov	r1, r7
+ 989 00da FFF7FEFF 		bl	__aeabi_dmul
+ 990              	.LVL128:
+ 991 00de 18A3     		adr	r3, .L94+24
+ 992 00e0 D3E90023 		ldrd	r2, [r3]
+ 993 00e4 FFF7FEFF 		bl	__aeabi_dadd
+ 994              	.LVL129:
+ 995 00e8 0246     		mov	r2, r0
+ 996 00ea 0B46     		mov	r3, r1
+ 997 00ec 0020     		movs	r0, #0
+ 998 00ee 1949     		ldr	r1, .L94+44
+ 999 00f0 FFF7FEFF 		bl	__aeabi_ddiv
+ 1000              	.LVL130:
+ 1001 00f4 45E90A01 		strd	r0, [r5, #-40]
+ 282:main.c        ****         }
+ 1002              		.loc 1 282 0 discriminator 3
+ 1003 00f8 13A3     		adr	r3, .L94+32
+ 1004 00fa D3E90023 		ldrd	r2, [r3]
+ 1005 00fe FFF7FEFF 		bl	__aeabi_dsub
+ 1006              	.LVL131:
+ 1007 0102 45E90A01 		strd	r0, [r5, #-40]
+ 279:main.c        ****             sens.data[i+1] = log(10000.0 * (256.0/sens.data[i+1] - 1));
+ 1008              		.loc 1 279 0 discriminator 3
+ 1009 0106 E3B2     		uxtb	r3, r4
+ 1010              	.LVL132:
+ 1011              	.L86:
+ 279:main.c        ****             sens.data[i+1] = log(10000.0 * (256.0/sens.data[i+1] - 1));
+ 1012              		.loc 1 279 0 is_stmt 0 discriminator 1
+ 1013 0108 012B     		cmp	r3, #1
+ 1014 010a B8D9     		bls	.L88
+ 1015              	.LVL133:
+ 1016              	.L89:
+ 285:main.c        ****        vTaskDelay( pdMS_TO_TICKS(2000)); //Delay for 20ms
+ 1017              		.loc 1 285 0 is_stmt 1 discriminator 1
+ 1018 010c 0023     		movs	r3, #0
+ 1019 010e 0A22     		movs	r2, #10
+ 1020 0110 6946     		mov	r1, sp
+ 1021 0112 1248     		ldr	r0, .L94+52
+ 1022 0114 006A     		ldr	r0, [r0, #32]
+ 1023 0116 FFF7FEFF 		bl	xQueueGenericSend
+ 1024              	.LVL134:
+ 1025 011a 0128     		cmp	r0, #1
+ 1026 011c F6D1     		bne	.L89
+ 286:main.c        ****        }
+ 1027              		.loc 1 286 0
+ 1028 011e 4FF4FA60 		mov	r0, #2000
+ 1029 0122 FFF7FEFF 		bl	vTaskDelay
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 28
+
+
+ 1030              	.LVL135:
+ 287:main.c        **** }
+ 1031              		.loc 1 287 0
+ 1032 0126 6DE7     		b	.L90
+ 1033              	.L95:
+ 1034              		.align	3
+ 1035              	.L94:
+ 1036 0128 00000000 		.word	0
+ 1037 012c 0088C340 		.word	1086556160
+ 1038 0130 190D1714 		.word	337055001
+ 1039 0134 EB88773E 		.word	1048021227
+ 1040 0138 C2C3B46F 		.word	1874117570
+ 1041 013c EEAF2E3F 		.word	1060024302
+ 1042 0140 90B8DE6E 		.word	1860090000
+ 1043 0144 FD7F523F 		.word	1062371325
+ 1044 0148 66666666 		.word	1717986918
+ 1045 014c 66127140 		.word	1081152102
+ 1046 0150 00405A40 		.word	1079656448
+ 1047 0154 0000F03F 		.word	1072693248
+ 1048 0158 00007040 		.word	1081081856
+ 1049 015c 00000000 		.word	.LANCHOR0
+ 1050              		.cfi_endproc
+ 1051              	.LFE72:
+ 1052              		.size	vGetData, .-vGetData
+ 1053              		.global	xQueue
+ 1054              		.comm	xTask4,4,4
+ 1055              		.global	xMessageBuffer
+ 1056              		.section	.rodata.str1.4,"aMS",%progbits,1
+ 1057              		.align	2
+ 1058              	.LC0:
+ 1059 0000 4E6F2053 		.ascii	"No Sunlight\000"
+ 1059      756E6C69 
+ 1059      67687400 
+ 1060              	.LC1:
+ 1061 000c 53756E6C 		.ascii	"Sunlight OK\000"
+ 1061      69676874 
+ 1061      204F4B00 
+ 1062              	.LC2:
+ 1063 0018 4F542533 		.ascii	"OT%3.0f\000"
+ 1063      2E306600 
+ 1064              	.LC3:
+ 1065 0020 49542532 		.ascii	"IT%2.0f\000"
+ 1065      2E306600 
+ 1066              	.LC4:
+ 1067 0028 2B505245 		.ascii	"+PRESON;\000"
+ 1067      534F4E3B 
+ 1067      00
+ 1068 0031 000000   		.space	3
+ 1069              	.LC5:
+ 1070 0034 2B505245 		.ascii	"+PRESOFF;\000"
+ 1070      534F4646 
+ 1070      3B00
+ 1071 003e 0000     		.space	2
+ 1072              	.LC6:
+ 1073 0040 25732B4F 		.ascii	"%s+OTEMP:%3.0f;+INTEMP:%2.0f;\000"
+ 1073      54454D50 
+ 1073      3A25332E 
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 29
+
+
+ 1073      30663B2B 
+ 1073      494E5445 
+ 1074 005e 0000     		.space	2
+ 1075              	.LC7:
+ 1076 0060 0D0A00   		.ascii	"\015\012\000"
+ 1077 0063 00       		.space	1
+ 1078              	.LC8:
+ 1079 0064 4C4F4E00 		.ascii	"LON\000"
+ 1080              	.LC9:
+ 1081 0068 4C4F4646 		.ascii	"LOFF\000"
+ 1081      00
+ 1082 006d 000000   		.space	3
+ 1083              	.LC10:
+ 1084 0070 574F5045 		.ascii	"WOPEN\000"
+ 1084      4E00
+ 1085 0076 0000     		.space	2
+ 1086              	.LC11:
+ 1087 0078 57434C4F 		.ascii	"WCLOSE\000"
+ 1087      534500
+ 1088 007f 00       		.space	1
+ 1089              	.LC12:
+ 1090 0080 464F4E00 		.ascii	"FON\000"
+ 1091              	.LC13:
+ 1092 0084 464F4646 		.ascii	"FOFF\000"
+ 1092      00
+ 1093 0089 000000   		.space	3
+ 1094              	.LC14:
+ 1095 008c 484F4E00 		.ascii	"HON\000"
+ 1096              	.LC15:
+ 1097 0090 484F4646 		.ascii	"HOFF\000"
+ 1097      00
+ 1098 0095 000000   		.space	3
+ 1099              	.LC16:
+ 1100 0098 45453434 		.ascii	"EE4450 FREERTOS\000"
+ 1100      35302046 
+ 1100      52454552 
+ 1100      544F5300 
+ 1101              	.LC17:
+ 1102 00a8 43616E27 		.ascii	"Can't create MsgBuf\000"
+ 1102      74206372 
+ 1102      65617465 
+ 1102      204D7367 
+ 1102      42756600 
+ 1103              	.LC18:
+ 1104 00bc 51554555 		.ascii	"QUEUE ERROR\000"
+ 1104      45204552 
+ 1104      524F5200 
+ 1105              	.LC19:
+ 1106 00c8 4C434420 		.ascii	"LCD Task\000"
+ 1106      5461736B 
+ 1106      00
+ 1107 00d1 000000   		.space	3
+ 1108              	.LC20:
+ 1109 00d4 43616E6E 		.ascii	"Cannot create Task!\000"
+ 1109      6F742063 
+ 1109      72656174 
+ 1109      65205461 
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 30
+
+
+ 1109      736B2100 
+ 1110              	.LC21:
+ 1111 00e8 53686F77 		.ascii	"Show Readings\000"
+ 1111      20526561 
+ 1111      64696E67 
+ 1111      7300
+ 1112 00f6 0000     		.space	2
+ 1113              	.LC22:
+ 1114 00f8 55415254 		.ascii	"UART SynC\000"
+ 1114      2053796E 
+ 1114      4300
+ 1115 0102 0000     		.space	2
+ 1116              	.LC23:
+ 1117 0104 4164756A 		.ascii	"Adujusting Greenhouse\000"
+ 1117      75737469 
+ 1117      6E672047 
+ 1117      7265656E 
+ 1117      686F7573 
+ 1118              		.bss
+ 1119              		.align	2
+ 1120              		.set	.LANCHOR0,. + 0
+ 1121              		.type	state.8341, %object
+ 1122              		.size	state.8341, 1
+ 1123              	state.8341:
+ 1124 0000 00       		.space	1
+ 1125 0001 000000   		.space	3
+ 1126              		.type	idx.8342, %object
+ 1127              		.size	idx.8342, 4
+ 1128              	idx.8342:
+ 1129 0004 00000000 		.space	4
+ 1130              		.type	buf.8340, %object
+ 1131              		.size	buf.8340, 20
+ 1132              	buf.8340:
+ 1133 0008 00000000 		.space	20
+ 1133      00000000 
+ 1133      00000000 
+ 1133      00000000 
+ 1133      00000000 
+ 1134              		.type	xMessageBuffer, %object
+ 1135              		.size	xMessageBuffer, 4
+ 1136              	xMessageBuffer:
+ 1137 001c 00000000 		.space	4
+ 1138              		.type	xQueue, %object
+ 1139              		.size	xQueue, 4
+ 1140              	xQueue:
+ 1141 0020 00000000 		.space	4
+ 1142              		.text
+ 1143              	.Letext0:
+ 1144              		.file 2 "c:\\program files (x86)\\cypress\\psoc creator\\4.4\\psoc creator\\import\\gnu\\arm\\5.4.
+ 1145              		.file 3 "c:\\program files (x86)\\cypress\\psoc creator\\4.4\\psoc creator\\import\\gnu\\arm\\5.4.
+ 1146              		.file 4 "c:\\program files (x86)\\cypress\\psoc creator\\4.4\\psoc creator\\import\\gnu\\arm\\5.4.
+ 1147              		.file 5 "..\\..\\FreeRTOS\\portable\\GCC\\ARM_CM3/portmacro.h"
+ 1148              		.file 6 "..\\..\\FreeRTOS\\include/task.h"
+ 1149              		.file 7 "..\\..\\FreeRTOS\\include/queue.h"
+ 1150              		.file 8 "..\\..\\FreeRTOS\\include/stream_buffer.h"
+ 1151              		.file 9 "..\\..\\FreeRTOS\\include/message_buffer.h"
+ 1152              		.file 10 "Generated_Source\\PSoC5/core_cm3.h"
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 31
+
+
+ 1153              		.file 11 "Generated_Source\\PSoC5/UART.h"
+ 1154              		.file 12 "Generated_Source\\PSoC5/LCD.h"
+ 1155              		.file 13 "c:\\program files (x86)\\cypress\\psoc creator\\4.4\\psoc creator\\import\\gnu\\arm\\5.4
+ 1156              		.file 14 "c:\\program files (x86)\\cypress\\psoc creator\\4.4\\psoc creator\\import\\gnu\\arm\\5.4
+ 1157              		.file 15 "Generated_Source\\PSoC5/UVLight.h"
+ 1158              		.file 16 "Generated_Source\\PSoC5/SERVOPWM.h"
+ 1159              		.file 17 "Generated_Source\\PSoC5/Fan.h"
+ 1160              		.file 18 "Generated_Source\\PSoC5/HeatPad.h"
+ 1161              		.file 19 "Generated_Source\\PSoC5/CyLib.h"
+ 1162              		.file 20 "Generated_Source\\PSoC5/ISR_UART.h"
+ 1163              		.file 21 "Generated_Source\\PSoC5/AMUX.h"
+ 1164              		.file 22 "Generated_Source\\PSoC5/SARADC.h"
+ 1165              		.file 23 "..\\..\\FreeRTOS/FreeRTOS_PSoC.h"
+ 1166              		.file 24 "c:\\program files (x86)\\cypress\\psoc creator\\4.4\\psoc creator\\import\\gnu\\arm\\5.4
+ 1167              		.section	.debug_info,"",%progbits
+ 1168              	.Ldebug_info0:
+ 1169 0000 A90C0000 		.4byte	0xca9
+ 1170 0004 0400     		.2byte	0x4
+ 1171 0006 00000000 		.4byte	.Ldebug_abbrev0
+ 1172 000a 04       		.byte	0x4
+ 1173 000b 01       		.uleb128 0x1
+ 1174 000c BA040000 		.4byte	.LASF88
+ 1175 0010 0C       		.byte	0xc
+ 1176 0011 1F040000 		.4byte	.LASF89
+ 1177 0015 EF020000 		.4byte	.LASF90
+ 1178 0019 00000000 		.4byte	.Ldebug_ranges0+0
+ 1179 001d 00000000 		.4byte	0
+ 1180 0021 00000000 		.4byte	.Ldebug_line0
+ 1181 0025 02       		.uleb128 0x2
+ 1182 0026 01       		.byte	0x1
+ 1183 0027 06       		.byte	0x6
+ 1184 0028 99020000 		.4byte	.LASF0
+ 1185 002c 03       		.uleb128 0x3
+ 1186 002d F7010000 		.4byte	.LASF4
+ 1187 0031 02       		.byte	0x2
+ 1188 0032 1D       		.byte	0x1d
+ 1189 0033 37000000 		.4byte	0x37
+ 1190 0037 02       		.uleb128 0x2
+ 1191 0038 01       		.byte	0x1
+ 1192 0039 08       		.byte	0x8
+ 1193 003a 7A020000 		.4byte	.LASF1
+ 1194 003e 02       		.uleb128 0x2
+ 1195 003f 02       		.byte	0x2
+ 1196 0040 05       		.byte	0x5
+ 1197 0041 97000000 		.4byte	.LASF2
+ 1198 0045 02       		.uleb128 0x2
+ 1199 0046 02       		.byte	0x2
+ 1200 0047 07       		.byte	0x7
+ 1201 0048 72030000 		.4byte	.LASF3
+ 1202 004c 03       		.uleb128 0x3
+ 1203 004d 6D040000 		.4byte	.LASF5
+ 1204 0051 02       		.byte	0x2
+ 1205 0052 3F       		.byte	0x3f
+ 1206 0053 57000000 		.4byte	0x57
+ 1207 0057 02       		.uleb128 0x2
+ 1208 0058 04       		.byte	0x4
+ 1209 0059 05       		.byte	0x5
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 32
+
+
+ 1210 005a B8010000 		.4byte	.LASF6
+ 1211 005e 03       		.uleb128 0x3
+ 1212 005f 62040000 		.4byte	.LASF7
+ 1213 0063 02       		.byte	0x2
+ 1214 0064 41       		.byte	0x41
+ 1215 0065 69000000 		.4byte	0x69
+ 1216 0069 02       		.uleb128 0x2
+ 1217 006a 04       		.byte	0x4
+ 1218 006b 07       		.byte	0x7
+ 1219 006c 26040000 		.4byte	.LASF8
+ 1220 0070 02       		.uleb128 0x2
+ 1221 0071 08       		.byte	0x8
+ 1222 0072 05       		.byte	0x5
+ 1223 0073 83010000 		.4byte	.LASF9
+ 1224 0077 02       		.uleb128 0x2
+ 1225 0078 08       		.byte	0x8
+ 1226 0079 07       		.byte	0x7
+ 1227 007a A5020000 		.4byte	.LASF10
+ 1228 007e 04       		.uleb128 0x4
+ 1229 007f 04       		.byte	0x4
+ 1230 0080 05       		.byte	0x5
+ 1231 0081 696E7400 		.ascii	"int\000"
+ 1232 0085 02       		.uleb128 0x2
+ 1233 0086 04       		.byte	0x4
+ 1234 0087 07       		.byte	0x7
+ 1235 0088 D2020000 		.4byte	.LASF11
+ 1236 008c 03       		.uleb128 0x3
+ 1237 008d 4E010000 		.4byte	.LASF12
+ 1238 0091 03       		.byte	0x3
+ 1239 0092 18       		.byte	0x18
+ 1240 0093 2C000000 		.4byte	0x2c
+ 1241 0097 03       		.uleb128 0x3
+ 1242 0098 C9030000 		.4byte	.LASF13
+ 1243 009c 03       		.byte	0x3
+ 1244 009d 2C       		.byte	0x2c
+ 1245 009e 4C000000 		.4byte	0x4c
+ 1246 00a2 03       		.uleb128 0x3
+ 1247 00a3 BC020000 		.4byte	.LASF14
+ 1248 00a7 03       		.byte	0x3
+ 1249 00a8 30       		.byte	0x30
+ 1250 00a9 5E000000 		.4byte	0x5e
+ 1251 00ad 02       		.uleb128 0x2
+ 1252 00ae 04       		.byte	0x4
+ 1253 00af 04       		.byte	0x4
+ 1254 00b0 7D010000 		.4byte	.LASF15
+ 1255 00b4 02       		.uleb128 0x2
+ 1256 00b5 08       		.byte	0x8
+ 1257 00b6 04       		.byte	0x4
+ 1258 00b7 38040000 		.4byte	.LASF16
+ 1259 00bb 02       		.uleb128 0x2
+ 1260 00bc 01       		.byte	0x1
+ 1261 00bd 08       		.byte	0x8
+ 1262 00be 93030000 		.4byte	.LASF17
+ 1263 00c2 03       		.uleb128 0x3
+ 1264 00c3 A1000000 		.4byte	.LASF18
+ 1265 00c7 04       		.byte	0x4
+ 1266 00c8 D8       		.byte	0xd8
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 33
+
+
+ 1267 00c9 85000000 		.4byte	0x85
+ 1268 00cd 02       		.uleb128 0x2
+ 1269 00ce 08       		.byte	0x8
+ 1270 00cf 04       		.byte	0x4
+ 1271 00d0 50020000 		.4byte	.LASF19
+ 1272 00d4 02       		.uleb128 0x2
+ 1273 00d5 04       		.byte	0x4
+ 1274 00d6 07       		.byte	0x7
+ 1275 00d7 97040000 		.4byte	.LASF20
+ 1276 00db 05       		.uleb128 0x5
+ 1277 00dc 04       		.byte	0x4
+ 1278 00dd 03       		.uleb128 0x3
+ 1279 00de C9010000 		.4byte	.LASF21
+ 1280 00e2 05       		.byte	0x5
+ 1281 00e3 38       		.byte	0x38
+ 1282 00e4 57000000 		.4byte	0x57
+ 1283 00e8 03       		.uleb128 0x3
+ 1284 00e9 45020000 		.4byte	.LASF22
+ 1285 00ed 05       		.byte	0x5
+ 1286 00ee 3F       		.byte	0x3f
+ 1287 00ef A2000000 		.4byte	0xa2
+ 1288 00f3 03       		.uleb128 0x3
+ 1289 00f4 C5020000 		.4byte	.LASF23
+ 1290 00f8 06       		.byte	0x6
+ 1291 00f9 46       		.byte	0x46
+ 1292 00fa FE000000 		.4byte	0xfe
+ 1293 00fe 06       		.uleb128 0x6
+ 1294 00ff 04       		.byte	0x4
+ 1295 0100 04010000 		.4byte	0x104
+ 1296 0104 07       		.uleb128 0x7
+ 1297 0105 E3010000 		.4byte	.LASF25
+ 1298 0109 03       		.uleb128 0x3
+ 1299 010a 10020000 		.4byte	.LASF24
+ 1300 010e 07       		.byte	0x7
+ 1301 010f 30       		.byte	0x30
+ 1302 0110 14010000 		.4byte	0x114
+ 1303 0114 06       		.uleb128 0x6
+ 1304 0115 04       		.byte	0x4
+ 1305 0116 1A010000 		.4byte	0x11a
+ 1306 011a 07       		.uleb128 0x7
+ 1307 011b 4D030000 		.4byte	.LASF26
+ 1308 011f 03       		.uleb128 0x3
+ 1309 0120 5D030000 		.4byte	.LASF27
+ 1310 0124 08       		.byte	0x8
+ 1311 0125 45       		.byte	0x45
+ 1312 0126 2A010000 		.4byte	0x12a
+ 1313 012a 06       		.uleb128 0x6
+ 1314 012b 04       		.byte	0x4
+ 1315 012c 30010000 		.4byte	0x130
+ 1316 0130 07       		.uleb128 0x7
+ 1317 0131 6C000000 		.4byte	.LASF28
+ 1318 0135 03       		.uleb128 0x3
+ 1319 0136 F4030000 		.4byte	.LASF29
+ 1320 013a 09       		.byte	0x9
+ 1321 013b 52       		.byte	0x52
+ 1322 013c DB000000 		.4byte	0xdb
+ 1323 0140 08       		.uleb128 0x8
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 34
+
+
+ 1324 0141 3F040000 		.4byte	.LASF31
+ 1325 0145 28       		.byte	0x28
+ 1326 0146 01       		.byte	0x1
+ 1327 0147 46       		.byte	0x46
+ 1328 0148 64010000 		.4byte	0x164
+ 1329 014c 09       		.uleb128 0x9
+ 1330 014d 696400   		.ascii	"id\000"
+ 1331 0150 01       		.byte	0x1
+ 1332 0151 47       		.byte	0x47
+ 1333 0152 8C000000 		.4byte	0x8c
+ 1334 0156 00       		.byte	0
+ 1335 0157 0A       		.uleb128 0xa
+ 1336 0158 1A040000 		.4byte	.LASF30
+ 1337 015c 01       		.byte	0x1
+ 1338 015d 48       		.byte	0x48
+ 1339 015e 64010000 		.4byte	0x164
+ 1340 0162 08       		.byte	0x8
+ 1341 0163 00       		.byte	0
+ 1342 0164 0B       		.uleb128 0xb
+ 1343 0165 B4000000 		.4byte	0xb4
+ 1344 0169 74010000 		.4byte	0x174
+ 1345 016d 0C       		.uleb128 0xc
+ 1346 016e D4000000 		.4byte	0xd4
+ 1347 0172 03       		.byte	0x3
+ 1348 0173 00       		.byte	0
+ 1349 0174 03       		.uleb128 0x3
+ 1350 0175 3F040000 		.4byte	.LASF31
+ 1351 0179 01       		.byte	0x1
+ 1352 017a 49       		.byte	0x49
+ 1353 017b 40010000 		.4byte	0x140
+ 1354 017f 0D       		.uleb128 0xd
+ 1355 0180 50000000 		.4byte	.LASF34
+ 1356 0184 01       		.byte	0x1
+ 1357 0185 37000000 		.4byte	0x37
+ 1358 0189 01       		.byte	0x1
+ 1359 018a CC       		.byte	0xcc
+ 1360 018b 9C010000 		.4byte	0x19c
+ 1361 018f 0E       		.uleb128 0xe
+ 1362 0190 D8030000 		.4byte	.LASF32
+ 1363 0194 00       		.byte	0
+ 1364 0195 0E       		.uleb128 0xe
+ 1365 0196 6D050000 		.4byte	.LASF33
+ 1366 019a 01       		.byte	0x1
+ 1367 019b 00       		.byte	0
+ 1368 019c 03       		.uleb128 0x3
+ 1369 019d 50000000 		.4byte	.LASF34
+ 1370 01a1 01       		.byte	0x1
+ 1371 01a2 CF       		.byte	0xcf
+ 1372 01a3 7F010000 		.4byte	0x17f
+ 1373 01a7 0F       		.uleb128 0xf
+ 1374 01a8 77050000 		.4byte	.LASF91
+ 1375 01ac 01       		.byte	0x1
+ 1376 01ad D3       		.byte	0xd3
+ 1377 01ae 00000000 		.4byte	.LFB71
+ 1378 01b2 7C000000 		.4byte	.LFE71-.LFB71
+ 1379 01b6 01       		.uleb128 0x1
+ 1380 01b7 9C       		.byte	0x9c
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 35
+
+
+ 1381 01b8 41020000 		.4byte	0x241
+ 1382 01bc 10       		.uleb128 0x10
+ 1383 01bd 62756600 		.ascii	"buf\000"
+ 1384 01c1 01       		.byte	0x1
+ 1385 01c2 D5       		.byte	0xd5
+ 1386 01c3 41020000 		.4byte	0x241
+ 1387 01c7 05       		.uleb128 0x5
+ 1388 01c8 03       		.byte	0x3
+ 1389 01c9 08000000 		.4byte	buf.8340
+ 1390 01cd 11       		.uleb128 0x11
+ 1391 01ce 35020000 		.4byte	.LASF35
+ 1392 01d2 01       		.byte	0x1
+ 1393 01d3 D6       		.byte	0xd6
+ 1394 01d4 9C010000 		.4byte	0x19c
+ 1395 01d8 05       		.uleb128 0x5
+ 1396 01d9 03       		.byte	0x3
+ 1397 01da 00000000 		.4byte	state.8341
+ 1398 01de 10       		.uleb128 0x10
+ 1399 01df 69647800 		.ascii	"idx\000"
+ 1400 01e3 01       		.byte	0x1
+ 1401 01e4 D7       		.byte	0xd7
+ 1402 01e5 7E000000 		.4byte	0x7e
+ 1403 01e9 05       		.uleb128 0x5
+ 1404 01ea 03       		.byte	0x3
+ 1405 01eb 04000000 		.4byte	idx.8342
+ 1406 01ef 12       		.uleb128 0x12
+ 1407 01f0 636800   		.ascii	"ch\000"
+ 1408 01f3 01       		.byte	0x1
+ 1409 01f4 D8       		.byte	0xd8
+ 1410 01f5 BB000000 		.4byte	0xbb
+ 1411 01f9 00000000 		.4byte	.LLST0
+ 1412 01fd 11       		.uleb128 0x11
+ 1413 01fe 7E040000 		.4byte	.LASF36
+ 1414 0202 01       		.byte	0x1
+ 1415 0203 DA       		.byte	0xda
+ 1416 0204 DD000000 		.4byte	0xdd
+ 1417 0208 02       		.uleb128 0x2
+ 1418 0209 91       		.byte	0x91
+ 1419 020a 6C       		.sleb128 -20
+ 1420 020b 13       		.uleb128 0x13
+ 1421 020c 0E000000 		.4byte	.LVL0
+ 1422 0210 010B0000 		.4byte	0xb01
+ 1423 0214 14       		.uleb128 0x14
+ 1424 0215 5A000000 		.4byte	.LVL2
+ 1425 0219 0C0B0000 		.4byte	0xb0c
+ 1426 021d 2E020000 		.4byte	0x22e
+ 1427 0221 15       		.uleb128 0x15
+ 1428 0222 01       		.uleb128 0x1
+ 1429 0223 51       		.byte	0x51
+ 1430 0224 02       		.uleb128 0x2
+ 1431 0225 74       		.byte	0x74
+ 1432 0226 08       		.sleb128 8
+ 1433 0227 15       		.uleb128 0x15
+ 1434 0228 01       		.uleb128 0x1
+ 1435 0229 53       		.byte	0x53
+ 1436 022a 02       		.uleb128 0x2
+ 1437 022b 91       		.byte	0x91
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 36
+
+
+ 1438 022c 6C       		.sleb128 -20
+ 1439 022d 00       		.byte	0
+ 1440 022e 13       		.uleb128 0x13
+ 1441 022f 6C000000 		.4byte	.LVL5
+ 1442 0233 180B0000 		.4byte	0xb18
+ 1443 0237 13       		.uleb128 0x13
+ 1444 0238 74000000 		.4byte	.LVL6
+ 1445 023c 230B0000 		.4byte	0xb23
+ 1446 0240 00       		.byte	0
+ 1447 0241 0B       		.uleb128 0xb
+ 1448 0242 BB000000 		.4byte	0xbb
+ 1449 0246 51020000 		.4byte	0x251
+ 1450 024a 0C       		.uleb128 0xc
+ 1451 024b D4000000 		.4byte	0xd4
+ 1452 024f 13       		.byte	0x13
+ 1453 0250 00       		.byte	0
+ 1454 0251 16       		.uleb128 0x16
+ 1455 0252 F0000000 		.4byte	.LASF38
+ 1456 0256 01       		.byte	0x1
+ 1457 0257 2401     		.2byte	0x124
+ 1458 0259 00000000 		.4byte	.LFB73
+ 1459 025d B4000000 		.4byte	.LFE73-.LFB73
+ 1460 0261 01       		.uleb128 0x1
+ 1461 0262 9C       		.byte	0x9c
+ 1462 0263 95030000 		.4byte	0x395
+ 1463 0267 17       		.uleb128 0x17
+ 1464 0268 39030000 		.4byte	.LASF40
+ 1465 026c 01       		.byte	0x1
+ 1466 026d 2401     		.2byte	0x124
+ 1467 026f DB000000 		.4byte	0xdb
+ 1468 0273 1E000000 		.4byte	.LLST1
+ 1469 0277 18       		.uleb128 0x18
+ 1470 0278 73747200 		.ascii	"str\000"
+ 1471 027c 01       		.byte	0x1
+ 1472 027d 2601     		.2byte	0x126
+ 1473 027f 95030000 		.4byte	0x395
+ 1474 0283 02       		.uleb128 0x2
+ 1475 0284 91       		.byte	0x91
+ 1476 0285 68       		.sleb128 -24
+ 1477 0286 19       		.uleb128 0x19
+ 1478 0287 A8000000 		.4byte	.LASF37
+ 1479 028b 01       		.byte	0x1
+ 1480 028c 2701     		.2byte	0x127
+ 1481 028e 74010000 		.4byte	0x174
+ 1482 0292 02       		.uleb128 0x2
+ 1483 0293 91       		.byte	0x91
+ 1484 0294 40       		.sleb128 -64
+ 1485 0295 14       		.uleb128 0x14
+ 1486 0296 10000000 		.4byte	.LVL9
+ 1487 029a 2E0B0000 		.4byte	0xb2e
+ 1488 029e AE020000 		.4byte	0x2ae
+ 1489 02a2 15       		.uleb128 0x15
+ 1490 02a3 01       		.uleb128 0x1
+ 1491 02a4 51       		.byte	0x51
+ 1492 02a5 02       		.uleb128 0x2
+ 1493 02a6 7D       		.byte	0x7d
+ 1494 02a7 00       		.sleb128 0
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 37
+
+
+ 1495 02a8 15       		.uleb128 0x15
+ 1496 02a9 01       		.uleb128 0x1
+ 1497 02aa 52       		.byte	0x52
+ 1498 02ab 01       		.uleb128 0x1
+ 1499 02ac 30       		.byte	0x30
+ 1500 02ad 00       		.byte	0
+ 1501 02ae 14       		.uleb128 0x14
+ 1502 02af 2E000000 		.4byte	.LVL11
+ 1503 02b3 3A0B0000 		.4byte	0xb3a
+ 1504 02b7 C6020000 		.4byte	0x2c6
+ 1505 02bb 15       		.uleb128 0x15
+ 1506 02bc 01       		.uleb128 0x1
+ 1507 02bd 50       		.byte	0x50
+ 1508 02be 01       		.uleb128 0x1
+ 1509 02bf 30       		.byte	0x30
+ 1510 02c0 15       		.uleb128 0x15
+ 1511 02c1 01       		.uleb128 0x1
+ 1512 02c2 51       		.byte	0x51
+ 1513 02c3 01       		.uleb128 0x1
+ 1514 02c4 30       		.byte	0x30
+ 1515 02c5 00       		.byte	0
+ 1516 02c6 14       		.uleb128 0x14
+ 1517 02c7 3E000000 		.4byte	.LVL12
+ 1518 02cb 450B0000 		.4byte	0xb45
+ 1519 02cf DA020000 		.4byte	0x2da
+ 1520 02d3 15       		.uleb128 0x15
+ 1521 02d4 01       		.uleb128 0x1
+ 1522 02d5 50       		.byte	0x50
+ 1523 02d6 02       		.uleb128 0x2
+ 1524 02d7 91       		.byte	0x91
+ 1525 02d8 68       		.sleb128 -24
+ 1526 02d9 00       		.byte	0
+ 1527 02da 14       		.uleb128 0x14
+ 1528 02db 56000000 		.4byte	.LVL14
+ 1529 02df 3A0B0000 		.4byte	0xb3a
+ 1530 02e3 F2020000 		.4byte	0x2f2
+ 1531 02e7 15       		.uleb128 0x15
+ 1532 02e8 01       		.uleb128 0x1
+ 1533 02e9 50       		.byte	0x50
+ 1534 02ea 01       		.uleb128 0x1
+ 1535 02eb 30       		.byte	0x30
+ 1536 02ec 15       		.uleb128 0x15
+ 1537 02ed 01       		.uleb128 0x1
+ 1538 02ee 51       		.byte	0x51
+ 1539 02ef 01       		.uleb128 0x1
+ 1540 02f0 30       		.byte	0x30
+ 1541 02f1 00       		.byte	0
+ 1542 02f2 14       		.uleb128 0x14
+ 1543 02f3 66000000 		.4byte	.LVL15
+ 1544 02f7 450B0000 		.4byte	0xb45
+ 1545 02fb 06030000 		.4byte	0x306
+ 1546 02ff 15       		.uleb128 0x15
+ 1547 0300 01       		.uleb128 0x1
+ 1548 0301 50       		.byte	0x50
+ 1549 0302 02       		.uleb128 0x2
+ 1550 0303 91       		.byte	0x91
+ 1551 0304 68       		.sleb128 -24
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 38
+
+
+ 1552 0305 00       		.byte	0
+ 1553 0306 14       		.uleb128 0x14
+ 1554 0307 72000000 		.4byte	.LVL16
+ 1555 030b 500B0000 		.4byte	0xb50
+ 1556 030f 23030000 		.4byte	0x323
+ 1557 0313 15       		.uleb128 0x15
+ 1558 0314 01       		.uleb128 0x1
+ 1559 0315 50       		.byte	0x50
+ 1560 0316 02       		.uleb128 0x2
+ 1561 0317 91       		.byte	0x91
+ 1562 0318 68       		.sleb128 -24
+ 1563 0319 15       		.uleb128 0x15
+ 1564 031a 01       		.uleb128 0x1
+ 1565 031b 51       		.byte	0x51
+ 1566 031c 05       		.uleb128 0x5
+ 1567 031d 03       		.byte	0x3
+ 1568 031e 18000000 		.4byte	.LC2
+ 1569 0322 00       		.byte	0
+ 1570 0323 14       		.uleb128 0x14
+ 1571 0324 7A000000 		.4byte	.LVL17
+ 1572 0328 3A0B0000 		.4byte	0xb3a
+ 1573 032c 3B030000 		.4byte	0x33b
+ 1574 0330 15       		.uleb128 0x15
+ 1575 0331 01       		.uleb128 0x1
+ 1576 0332 50       		.byte	0x50
+ 1577 0333 01       		.uleb128 0x1
+ 1578 0334 31       		.byte	0x31
+ 1579 0335 15       		.uleb128 0x15
+ 1580 0336 01       		.uleb128 0x1
+ 1581 0337 51       		.byte	0x51
+ 1582 0338 01       		.uleb128 0x1
+ 1583 0339 30       		.byte	0x30
+ 1584 033a 00       		.byte	0
+ 1585 033b 14       		.uleb128 0x14
+ 1586 033c 80000000 		.4byte	.LVL18
+ 1587 0340 450B0000 		.4byte	0xb45
+ 1588 0344 4F030000 		.4byte	0x34f
+ 1589 0348 15       		.uleb128 0x15
+ 1590 0349 01       		.uleb128 0x1
+ 1591 034a 50       		.byte	0x50
+ 1592 034b 02       		.uleb128 0x2
+ 1593 034c 91       		.byte	0x91
+ 1594 034d 68       		.sleb128 -24
+ 1595 034e 00       		.byte	0
+ 1596 034f 14       		.uleb128 0x14
+ 1597 0350 8C000000 		.4byte	.LVL19
+ 1598 0354 500B0000 		.4byte	0xb50
+ 1599 0358 6C030000 		.4byte	0x36c
+ 1600 035c 15       		.uleb128 0x15
+ 1601 035d 01       		.uleb128 0x1
+ 1602 035e 50       		.byte	0x50
+ 1603 035f 02       		.uleb128 0x2
+ 1604 0360 91       		.byte	0x91
+ 1605 0361 68       		.sleb128 -24
+ 1606 0362 15       		.uleb128 0x15
+ 1607 0363 01       		.uleb128 0x1
+ 1608 0364 51       		.byte	0x51
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 39
+
+
+ 1609 0365 05       		.uleb128 0x5
+ 1610 0366 03       		.byte	0x3
+ 1611 0367 20000000 		.4byte	.LC3
+ 1612 036b 00       		.byte	0
+ 1613 036c 14       		.uleb128 0x14
+ 1614 036d 94000000 		.4byte	.LVL20
+ 1615 0371 3A0B0000 		.4byte	0xb3a
+ 1616 0375 84030000 		.4byte	0x384
+ 1617 0379 15       		.uleb128 0x15
+ 1618 037a 01       		.uleb128 0x1
+ 1619 037b 50       		.byte	0x50
+ 1620 037c 01       		.uleb128 0x1
+ 1621 037d 31       		.byte	0x31
+ 1622 037e 15       		.uleb128 0x15
+ 1623 037f 01       		.uleb128 0x1
+ 1624 0380 51       		.byte	0x51
+ 1625 0381 01       		.uleb128 0x1
+ 1626 0382 37       		.byte	0x37
+ 1627 0383 00       		.byte	0
+ 1628 0384 1A       		.uleb128 0x1a
+ 1629 0385 9A000000 		.4byte	.LVL21
+ 1630 0389 450B0000 		.4byte	0xb45
+ 1631 038d 15       		.uleb128 0x15
+ 1632 038e 01       		.uleb128 0x1
+ 1633 038f 50       		.byte	0x50
+ 1634 0390 02       		.uleb128 0x2
+ 1635 0391 91       		.byte	0x91
+ 1636 0392 68       		.sleb128 -24
+ 1637 0393 00       		.byte	0
+ 1638 0394 00       		.byte	0
+ 1639 0395 0B       		.uleb128 0xb
+ 1640 0396 BB000000 		.4byte	0xbb
+ 1641 039a A5030000 		.4byte	0x3a5
+ 1642 039e 0C       		.uleb128 0xc
+ 1643 039f D4000000 		.4byte	0xd4
+ 1644 03a3 04       		.byte	0x4
+ 1645 03a4 00       		.byte	0
+ 1646 03a5 16       		.uleb128 0x16
+ 1647 03a6 47040000 		.4byte	.LASF39
+ 1648 03aa 01       		.byte	0x1
+ 1649 03ab 4401     		.2byte	0x144
+ 1650 03ad 00000000 		.4byte	.LFB74
+ 1651 03b1 98000000 		.4byte	.LFE74-.LFB74
+ 1652 03b5 01       		.uleb128 0x1
+ 1653 03b6 9C       		.byte	0x9c
+ 1654 03b7 4C040000 		.4byte	0x44c
+ 1655 03bb 17       		.uleb128 0x17
+ 1656 03bc 39030000 		.4byte	.LASF40
+ 1657 03c0 01       		.byte	0x1
+ 1658 03c1 4401     		.2byte	0x144
+ 1659 03c3 DB000000 		.4byte	0xdb
+ 1660 03c7 3F000000 		.4byte	.LLST2
+ 1661 03cb 18       		.uleb128 0x18
+ 1662 03cc 73747200 		.ascii	"str\000"
+ 1663 03d0 01       		.byte	0x1
+ 1664 03d1 4601     		.2byte	0x146
+ 1665 03d3 4C040000 		.4byte	0x44c
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 40
+
+
+ 1666 03d7 02       		.uleb128 0x2
+ 1667 03d8 91       		.byte	0x91
+ 1668 03d9 50       		.sleb128 -48
+ 1669 03da 19       		.uleb128 0x19
+ 1670 03db A8000000 		.4byte	.LASF37
+ 1671 03df 01       		.byte	0x1
+ 1672 03e0 4701     		.2byte	0x147
+ 1673 03e2 74010000 		.4byte	0x174
+ 1674 03e6 03       		.uleb128 0x3
+ 1675 03e7 91       		.byte	0x91
+ 1676 03e8 A87F     		.sleb128 -88
+ 1677 03ea 14       		.uleb128 0x14
+ 1678 03eb 10000000 		.4byte	.LVL24
+ 1679 03ef 2E0B0000 		.4byte	0xb2e
+ 1680 03f3 04040000 		.4byte	0x404
+ 1681 03f7 15       		.uleb128 0x15
+ 1682 03f8 01       		.uleb128 0x1
+ 1683 03f9 51       		.byte	0x51
+ 1684 03fa 03       		.uleb128 0x3
+ 1685 03fb 91       		.byte	0x91
+ 1686 03fc A87F     		.sleb128 -88
+ 1687 03fe 15       		.uleb128 0x15
+ 1688 03ff 01       		.uleb128 0x1
+ 1689 0400 52       		.byte	0x52
+ 1690 0401 01       		.uleb128 0x1
+ 1691 0402 30       		.byte	0x30
+ 1692 0403 00       		.byte	0
+ 1693 0404 14       		.uleb128 0x14
+ 1694 0405 64000000 		.4byte	.LVL27
+ 1695 0409 500B0000 		.4byte	0xb50
+ 1696 040d 27040000 		.4byte	0x427
+ 1697 0411 15       		.uleb128 0x15
+ 1698 0412 01       		.uleb128 0x1
+ 1699 0413 50       		.byte	0x50
+ 1700 0414 02       		.uleb128 0x2
+ 1701 0415 91       		.byte	0x91
+ 1702 0416 50       		.sleb128 -48
+ 1703 0417 15       		.uleb128 0x15
+ 1704 0418 01       		.uleb128 0x1
+ 1705 0419 51       		.byte	0x51
+ 1706 041a 05       		.uleb128 0x5
+ 1707 041b 03       		.byte	0x3
+ 1708 041c 40000000 		.4byte	.LC6
+ 1709 0420 15       		.uleb128 0x15
+ 1710 0421 01       		.uleb128 0x1
+ 1711 0422 52       		.byte	0x52
+ 1712 0423 02       		.uleb128 0x2
+ 1713 0424 91       		.byte	0x91
+ 1714 0425 50       		.sleb128 -48
+ 1715 0426 00       		.byte	0
+ 1716 0427 14       		.uleb128 0x14
+ 1717 0428 6A000000 		.4byte	.LVL28
+ 1718 042c 5B0B0000 		.4byte	0xb5b
+ 1719 0430 3B040000 		.4byte	0x43b
+ 1720 0434 15       		.uleb128 0x15
+ 1721 0435 01       		.uleb128 0x1
+ 1722 0436 50       		.byte	0x50
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 41
+
+
+ 1723 0437 02       		.uleb128 0x2
+ 1724 0438 91       		.byte	0x91
+ 1725 0439 50       		.sleb128 -48
+ 1726 043a 00       		.byte	0
+ 1727 043b 1A       		.uleb128 0x1a
+ 1728 043c 7E000000 		.4byte	.LVL29
+ 1729 0440 5B0B0000 		.4byte	0xb5b
+ 1730 0444 15       		.uleb128 0x15
+ 1731 0445 01       		.uleb128 0x1
+ 1732 0446 50       		.byte	0x50
+ 1733 0447 02       		.uleb128 0x2
+ 1734 0448 91       		.byte	0x91
+ 1735 0449 50       		.sleb128 -48
+ 1736 044a 00       		.byte	0
+ 1737 044b 00       		.byte	0
+ 1738 044c 0B       		.uleb128 0xb
+ 1739 044d BB000000 		.4byte	0xbb
+ 1740 0451 5C040000 		.4byte	0x45c
+ 1741 0455 0C       		.uleb128 0xc
+ 1742 0456 D4000000 		.4byte	0xd4
+ 1743 045a 1D       		.byte	0x1d
+ 1744 045b 00       		.byte	0
+ 1745 045c 1B       		.uleb128 0x1b
+ 1746 045d 46030000 		.4byte	.LASF41
+ 1747 0461 01       		.byte	0x1
+ 1748 0462 5F01     		.2byte	0x15f
+ 1749 0464 00000000 		.4byte	.LFB75
+ 1750 0468 C8000000 		.4byte	.LFE75-.LFB75
+ 1751 046c 01       		.uleb128 0x1
+ 1752 046d 9C       		.byte	0x9c
+ 1753 046e 57060000 		.4byte	0x657
+ 1754 0472 17       		.uleb128 0x17
+ 1755 0473 39030000 		.4byte	.LASF40
+ 1756 0477 01       		.byte	0x1
+ 1757 0478 5F01     		.2byte	0x15f
+ 1758 047a DB000000 		.4byte	0xdb
+ 1759 047e 60000000 		.4byte	.LLST3
+ 1760 0482 19       		.uleb128 0x19
+ 1761 0483 90020000 		.4byte	.LASF42
+ 1762 0487 01       		.byte	0x1
+ 1763 0488 6101     		.2byte	0x161
+ 1764 048a 35010000 		.4byte	0x135
+ 1765 048e 01       		.uleb128 0x1
+ 1766 048f 54       		.byte	0x54
+ 1767 0490 18       		.uleb128 0x18
+ 1768 0491 62756600 		.ascii	"buf\000"
+ 1769 0495 01       		.byte	0x1
+ 1770 0496 6201     		.2byte	0x162
+ 1771 0498 41020000 		.4byte	0x241
+ 1772 049c 02       		.uleb128 0x2
+ 1773 049d 91       		.byte	0x91
+ 1774 049e 64       		.sleb128 -28
+ 1775 049f 1C       		.uleb128 0x1c
+ 1776 04a0 73747200 		.ascii	"str\000"
+ 1777 04a4 01       		.byte	0x1
+ 1778 04a5 6301     		.2byte	0x163
+ 1779 04a7 57060000 		.4byte	0x657
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 42
+
+
+ 1780 04ab 1D       		.uleb128 0x1d
+ 1781 04ac 01020000 		.4byte	.LASF43
+ 1782 04b0 01       		.byte	0x1
+ 1783 04b1 6401     		.2byte	0x164
+ 1784 04b3 C2000000 		.4byte	0xc2
+ 1785 04b7 7E000000 		.4byte	.LLST4
+ 1786 04bb 14       		.uleb128 0x14
+ 1787 04bc 12000000 		.4byte	.LVL32
+ 1788 04c0 660B0000 		.4byte	0xb66
+ 1789 04c4 DF040000 		.4byte	0x4df
+ 1790 04c8 15       		.uleb128 0x15
+ 1791 04c9 01       		.uleb128 0x1
+ 1792 04ca 50       		.byte	0x50
+ 1793 04cb 02       		.uleb128 0x2
+ 1794 04cc 74       		.byte	0x74
+ 1795 04cd 00       		.sleb128 0
+ 1796 04ce 15       		.uleb128 0x15
+ 1797 04cf 01       		.uleb128 0x1
+ 1798 04d0 51       		.byte	0x51
+ 1799 04d1 02       		.uleb128 0x2
+ 1800 04d2 91       		.byte	0x91
+ 1801 04d3 64       		.sleb128 -28
+ 1802 04d4 15       		.uleb128 0x15
+ 1803 04d5 01       		.uleb128 0x1
+ 1804 04d6 52       		.byte	0x52
+ 1805 04d7 01       		.uleb128 0x1
+ 1806 04d8 44       		.byte	0x44
+ 1807 04d9 15       		.uleb128 0x15
+ 1808 04da 01       		.uleb128 0x1
+ 1809 04db 53       		.byte	0x53
+ 1810 04dc 01       		.uleb128 0x1
+ 1811 04dd 44       		.byte	0x44
+ 1812 04de 00       		.byte	0
+ 1813 04df 14       		.uleb128 0x14
+ 1814 04e0 1E000000 		.4byte	.LVL34
+ 1815 04e4 720B0000 		.4byte	0xb72
+ 1816 04e8 FC040000 		.4byte	0x4fc
+ 1817 04ec 15       		.uleb128 0x15
+ 1818 04ed 01       		.uleb128 0x1
+ 1819 04ee 50       		.byte	0x50
+ 1820 04ef 02       		.uleb128 0x2
+ 1821 04f0 91       		.byte	0x91
+ 1822 04f1 64       		.sleb128 -28
+ 1823 04f2 15       		.uleb128 0x15
+ 1824 04f3 01       		.uleb128 0x1
+ 1825 04f4 51       		.byte	0x51
+ 1826 04f5 05       		.uleb128 0x5
+ 1827 04f6 03       		.byte	0x3
+ 1828 04f7 64000000 		.4byte	.LC8
+ 1829 04fb 00       		.byte	0
+ 1830 04fc 14       		.uleb128 0x14
+ 1831 04fd 26000000 		.4byte	.LVL35
+ 1832 0501 7D0B0000 		.4byte	0xb7d
+ 1833 0505 0F050000 		.4byte	0x50f
+ 1834 0509 15       		.uleb128 0x15
+ 1835 050a 01       		.uleb128 0x1
+ 1836 050b 50       		.byte	0x50
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 43
+
+
+ 1837 050c 01       		.uleb128 0x1
+ 1838 050d 31       		.byte	0x31
+ 1839 050e 00       		.byte	0
+ 1840 050f 14       		.uleb128 0x14
+ 1841 0510 30000000 		.4byte	.LVL36
+ 1842 0514 720B0000 		.4byte	0xb72
+ 1843 0518 2C050000 		.4byte	0x52c
+ 1844 051c 15       		.uleb128 0x15
+ 1845 051d 01       		.uleb128 0x1
+ 1846 051e 50       		.byte	0x50
+ 1847 051f 02       		.uleb128 0x2
+ 1848 0520 91       		.byte	0x91
+ 1849 0521 64       		.sleb128 -28
+ 1850 0522 15       		.uleb128 0x15
+ 1851 0523 01       		.uleb128 0x1
+ 1852 0524 51       		.byte	0x51
+ 1853 0525 05       		.uleb128 0x5
+ 1854 0526 03       		.byte	0x3
+ 1855 0527 68000000 		.4byte	.LC9
+ 1856 052b 00       		.byte	0
+ 1857 052c 13       		.uleb128 0x13
+ 1858 052d 36000000 		.4byte	.LVL37
+ 1859 0531 7D0B0000 		.4byte	0xb7d
+ 1860 0535 14       		.uleb128 0x14
+ 1861 0536 3E000000 		.4byte	.LVL38
+ 1862 053a 720B0000 		.4byte	0xb72
+ 1863 053e 52050000 		.4byte	0x552
+ 1864 0542 15       		.uleb128 0x15
+ 1865 0543 01       		.uleb128 0x1
+ 1866 0544 50       		.byte	0x50
+ 1867 0545 02       		.uleb128 0x2
+ 1868 0546 91       		.byte	0x91
+ 1869 0547 64       		.sleb128 -28
+ 1870 0548 15       		.uleb128 0x15
+ 1871 0549 01       		.uleb128 0x1
+ 1872 054a 51       		.byte	0x51
+ 1873 054b 05       		.uleb128 0x5
+ 1874 054c 03       		.byte	0x3
+ 1875 054d 70000000 		.4byte	.LC10
+ 1876 0551 00       		.byte	0
+ 1877 0552 14       		.uleb128 0x14
+ 1878 0553 48000000 		.4byte	.LVL39
+ 1879 0557 880B0000 		.4byte	0xb88
+ 1880 055b 67050000 		.4byte	0x567
+ 1881 055f 15       		.uleb128 0x15
+ 1882 0560 01       		.uleb128 0x1
+ 1883 0561 50       		.byte	0x50
+ 1884 0562 03       		.uleb128 0x3
+ 1885 0563 0A       		.byte	0xa
+ 1886 0564 5046     		.2byte	0x4650
+ 1887 0566 00       		.byte	0
+ 1888 0567 14       		.uleb128 0x14
+ 1889 0568 52000000 		.4byte	.LVL40
+ 1890 056c 720B0000 		.4byte	0xb72
+ 1891 0570 84050000 		.4byte	0x584
+ 1892 0574 15       		.uleb128 0x15
+ 1893 0575 01       		.uleb128 0x1
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 44
+
+
+ 1894 0576 50       		.byte	0x50
+ 1895 0577 02       		.uleb128 0x2
+ 1896 0578 91       		.byte	0x91
+ 1897 0579 64       		.sleb128 -28
+ 1898 057a 15       		.uleb128 0x15
+ 1899 057b 01       		.uleb128 0x1
+ 1900 057c 51       		.byte	0x51
+ 1901 057d 05       		.uleb128 0x5
+ 1902 057e 03       		.byte	0x3
+ 1903 057f 78000000 		.4byte	.LC11
+ 1904 0583 00       		.byte	0
+ 1905 0584 14       		.uleb128 0x14
+ 1906 0585 5C000000 		.4byte	.LVL41
+ 1907 0589 880B0000 		.4byte	0xb88
+ 1908 058d 99050000 		.4byte	0x599
+ 1909 0591 15       		.uleb128 0x15
+ 1910 0592 01       		.uleb128 0x1
+ 1911 0593 50       		.byte	0x50
+ 1912 0594 03       		.uleb128 0x3
+ 1913 0595 0A       		.byte	0xa
+ 1914 0596 384A     		.2byte	0x4a38
+ 1915 0598 00       		.byte	0
+ 1916 0599 14       		.uleb128 0x14
+ 1917 059a 64000000 		.4byte	.LVL42
+ 1918 059e 720B0000 		.4byte	0xb72
+ 1919 05a2 B6050000 		.4byte	0x5b6
+ 1920 05a6 15       		.uleb128 0x15
+ 1921 05a7 01       		.uleb128 0x1
+ 1922 05a8 50       		.byte	0x50
+ 1923 05a9 02       		.uleb128 0x2
+ 1924 05aa 91       		.byte	0x91
+ 1925 05ab 64       		.sleb128 -28
+ 1926 05ac 15       		.uleb128 0x15
+ 1927 05ad 01       		.uleb128 0x1
+ 1928 05ae 51       		.byte	0x51
+ 1929 05af 05       		.uleb128 0x5
+ 1930 05b0 03       		.byte	0x3
+ 1931 05b1 80000000 		.4byte	.LC12
+ 1932 05b5 00       		.byte	0
+ 1933 05b6 14       		.uleb128 0x14
+ 1934 05b7 6C000000 		.4byte	.LVL43
+ 1935 05bb 930B0000 		.4byte	0xb93
+ 1936 05bf C9050000 		.4byte	0x5c9
+ 1937 05c3 15       		.uleb128 0x15
+ 1938 05c4 01       		.uleb128 0x1
+ 1939 05c5 50       		.byte	0x50
+ 1940 05c6 01       		.uleb128 0x1
+ 1941 05c7 31       		.byte	0x31
+ 1942 05c8 00       		.byte	0
+ 1943 05c9 14       		.uleb128 0x14
+ 1944 05ca 76000000 		.4byte	.LVL44
+ 1945 05ce 720B0000 		.4byte	0xb72
+ 1946 05d2 E6050000 		.4byte	0x5e6
+ 1947 05d6 15       		.uleb128 0x15
+ 1948 05d7 01       		.uleb128 0x1
+ 1949 05d8 50       		.byte	0x50
+ 1950 05d9 02       		.uleb128 0x2
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 45
+
+
+ 1951 05da 91       		.byte	0x91
+ 1952 05db 64       		.sleb128 -28
+ 1953 05dc 15       		.uleb128 0x15
+ 1954 05dd 01       		.uleb128 0x1
+ 1955 05de 51       		.byte	0x51
+ 1956 05df 05       		.uleb128 0x5
+ 1957 05e0 03       		.byte	0x3
+ 1958 05e1 84000000 		.4byte	.LC13
+ 1959 05e5 00       		.byte	0
+ 1960 05e6 13       		.uleb128 0x13
+ 1961 05e7 7C000000 		.4byte	.LVL45
+ 1962 05eb 930B0000 		.4byte	0xb93
+ 1963 05ef 14       		.uleb128 0x14
+ 1964 05f0 84000000 		.4byte	.LVL46
+ 1965 05f4 720B0000 		.4byte	0xb72
+ 1966 05f8 0C060000 		.4byte	0x60c
+ 1967 05fc 15       		.uleb128 0x15
+ 1968 05fd 01       		.uleb128 0x1
+ 1969 05fe 50       		.byte	0x50
+ 1970 05ff 02       		.uleb128 0x2
+ 1971 0600 91       		.byte	0x91
+ 1972 0601 64       		.sleb128 -28
+ 1973 0602 15       		.uleb128 0x15
+ 1974 0603 01       		.uleb128 0x1
+ 1975 0604 51       		.byte	0x51
+ 1976 0605 05       		.uleb128 0x5
+ 1977 0606 03       		.byte	0x3
+ 1978 0607 8C000000 		.4byte	.LC14
+ 1979 060b 00       		.byte	0
+ 1980 060c 14       		.uleb128 0x14
+ 1981 060d 8C000000 		.4byte	.LVL47
+ 1982 0611 9E0B0000 		.4byte	0xb9e
+ 1983 0615 1F060000 		.4byte	0x61f
+ 1984 0619 15       		.uleb128 0x15
+ 1985 061a 01       		.uleb128 0x1
+ 1986 061b 50       		.byte	0x50
+ 1987 061c 01       		.uleb128 0x1
+ 1988 061d 31       		.byte	0x31
+ 1989 061e 00       		.byte	0
+ 1990 061f 14       		.uleb128 0x14
+ 1991 0620 96000000 		.4byte	.LVL48
+ 1992 0624 720B0000 		.4byte	0xb72
+ 1993 0628 3C060000 		.4byte	0x63c
+ 1994 062c 15       		.uleb128 0x15
+ 1995 062d 01       		.uleb128 0x1
+ 1996 062e 50       		.byte	0x50
+ 1997 062f 02       		.uleb128 0x2
+ 1998 0630 91       		.byte	0x91
+ 1999 0631 64       		.sleb128 -28
+ 2000 0632 15       		.uleb128 0x15
+ 2001 0633 01       		.uleb128 0x1
+ 2002 0634 51       		.byte	0x51
+ 2003 0635 05       		.uleb128 0x5
+ 2004 0636 03       		.byte	0x3
+ 2005 0637 90000000 		.4byte	.LC15
+ 2006 063b 00       		.byte	0
+ 2007 063c 13       		.uleb128 0x13
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 46
+
+
+ 2008 063d 9C000000 		.4byte	.LVL49
+ 2009 0641 9E0B0000 		.4byte	0xb9e
+ 2010 0645 1A       		.uleb128 0x1a
+ 2011 0646 A4000000 		.4byte	.LVL50
+ 2012 064a A90B0000 		.4byte	0xba9
+ 2013 064e 15       		.uleb128 0x15
+ 2014 064f 01       		.uleb128 0x1
+ 2015 0650 50       		.byte	0x50
+ 2016 0651 03       		.uleb128 0x3
+ 2017 0652 0A       		.byte	0xa
+ 2018 0653 E803     		.2byte	0x3e8
+ 2019 0655 00       		.byte	0
+ 2020 0656 00       		.byte	0
+ 2021 0657 0B       		.uleb128 0xb
+ 2022 0658 BB000000 		.4byte	0xbb
+ 2023 065c 67060000 		.4byte	0x667
+ 2024 0660 0C       		.uleb128 0xc
+ 2025 0661 D4000000 		.4byte	0xd4
+ 2026 0665 3B       		.byte	0x3b
+ 2027 0666 00       		.byte	0
+ 2028 0667 1E       		.uleb128 0x1e
+ 2029 0668 2F000000 		.4byte	.LASF92
+ 2030 066c 01       		.byte	0x1
+ 2031 066d BA       		.byte	0xba
+ 2032 066e 00000000 		.4byte	.LFB70
+ 2033 0672 44000000 		.4byte	.LFE70-.LFB70
+ 2034 0676 01       		.uleb128 0x1
+ 2035 0677 9C       		.byte	0x9c
+ 2036 0678 22070000 		.4byte	0x722
+ 2037 067c 13       		.uleb128 0x13
+ 2038 067d 06000000 		.4byte	.LVL51
+ 2039 0681 B50B0000 		.4byte	0xbb5
+ 2040 0685 14       		.uleb128 0x14
+ 2041 0686 0C000000 		.4byte	.LVL52
+ 2042 068a C00B0000 		.4byte	0xbc0
+ 2043 068e 98060000 		.4byte	0x698
+ 2044 0692 15       		.uleb128 0x15
+ 2045 0693 01       		.uleb128 0x1
+ 2046 0694 50       		.byte	0x50
+ 2047 0695 01       		.uleb128 0x1
+ 2048 0696 31       		.byte	0x31
+ 2049 0697 00       		.byte	0
+ 2050 0698 14       		.uleb128 0x14
+ 2051 0699 14000000 		.4byte	.LVL53
+ 2052 069d 3A0B0000 		.4byte	0xb3a
+ 2053 06a1 B0060000 		.4byte	0x6b0
+ 2054 06a5 15       		.uleb128 0x15
+ 2055 06a6 01       		.uleb128 0x1
+ 2056 06a7 50       		.byte	0x50
+ 2057 06a8 01       		.uleb128 0x1
+ 2058 06a9 30       		.byte	0x30
+ 2059 06aa 15       		.uleb128 0x15
+ 2060 06ab 01       		.uleb128 0x1
+ 2061 06ac 51       		.byte	0x51
+ 2062 06ad 01       		.uleb128 0x1
+ 2063 06ae 30       		.byte	0x30
+ 2064 06af 00       		.byte	0
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 47
+
+
+ 2065 06b0 14       		.uleb128 0x14
+ 2066 06b1 1A000000 		.4byte	.LVL54
+ 2067 06b5 450B0000 		.4byte	0xb45
+ 2068 06b9 C7060000 		.4byte	0x6c7
+ 2069 06bd 15       		.uleb128 0x15
+ 2070 06be 01       		.uleb128 0x1
+ 2071 06bf 50       		.byte	0x50
+ 2072 06c0 05       		.uleb128 0x5
+ 2073 06c1 03       		.byte	0x3
+ 2074 06c2 98000000 		.4byte	.LC16
+ 2075 06c6 00       		.byte	0
+ 2076 06c7 14       		.uleb128 0x14
+ 2077 06c8 20000000 		.4byte	.LVL55
+ 2078 06cc C00B0000 		.4byte	0xbc0
+ 2079 06d0 DA060000 		.4byte	0x6da
+ 2080 06d4 15       		.uleb128 0x15
+ 2081 06d5 01       		.uleb128 0x1
+ 2082 06d6 50       		.byte	0x50
+ 2083 06d7 01       		.uleb128 0x1
+ 2084 06d8 31       		.byte	0x31
+ 2085 06d9 00       		.byte	0
+ 2086 06da 14       		.uleb128 0x14
+ 2087 06db 28000000 		.4byte	.LVL56
+ 2088 06df CB0B0000 		.4byte	0xbcb
+ 2089 06e3 EF060000 		.4byte	0x6ef
+ 2090 06e7 15       		.uleb128 0x15
+ 2091 06e8 01       		.uleb128 0x1
+ 2092 06e9 50       		.byte	0x50
+ 2093 06ea 03       		.uleb128 0x3
+ 2094 06eb 0A       		.byte	0xa
+ 2095 06ec E803     		.2byte	0x3e8
+ 2096 06ee 00       		.byte	0
+ 2097 06ef 14       		.uleb128 0x14
+ 2098 06f0 2E000000 		.4byte	.LVL57
+ 2099 06f4 D60B0000 		.4byte	0xbd6
+ 2100 06f8 06070000 		.4byte	0x706
+ 2101 06fc 15       		.uleb128 0x15
+ 2102 06fd 01       		.uleb128 0x1
+ 2103 06fe 50       		.byte	0x50
+ 2104 06ff 05       		.uleb128 0x5
+ 2105 0700 03       		.byte	0x3
+ 2106 0701 00000000 		.4byte	MyUartISR
+ 2107 0705 00       		.byte	0
+ 2108 0706 13       		.uleb128 0x13
+ 2109 0707 32000000 		.4byte	.LVL58
+ 2110 070b E10B0000 		.4byte	0xbe1
+ 2111 070f 13       		.uleb128 0x13
+ 2112 0710 36000000 		.4byte	.LVL59
+ 2113 0714 EC0B0000 		.4byte	0xbec
+ 2114 0718 13       		.uleb128 0x13
+ 2115 0719 3A000000 		.4byte	.LVL60
+ 2116 071d F70B0000 		.4byte	0xbf7
+ 2117 0721 00       		.byte	0
+ 2118 0722 1F       		.uleb128 0x1f
+ 2119 0723 EB000000 		.4byte	.LASF93
+ 2120 0727 01       		.byte	0x1
+ 2121 0728 5D       		.byte	0x5d
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 48
+
+
+ 2122 0729 7E000000 		.4byte	0x7e
+ 2123 072d 00000000 		.4byte	.LFB69
+ 2124 0731 2C010000 		.4byte	.LFE69-.LFB69
+ 2125 0735 01       		.uleb128 0x1
+ 2126 0736 9C       		.byte	0x9c
+ 2127 0737 AE090000 		.4byte	0x9ae
+ 2128 073b 12       		.uleb128 0x12
+ 2129 073c 65727200 		.ascii	"err\000"
+ 2130 0740 01       		.byte	0x1
+ 2131 0741 60       		.byte	0x60
+ 2132 0742 DD000000 		.4byte	0xdd
+ 2133 0746 91000000 		.4byte	.LLST5
+ 2134 074a 13       		.uleb128 0x13
+ 2135 074b 08000000 		.4byte	.LVL61
+ 2136 074f 020C0000 		.4byte	0xc02
+ 2137 0753 13       		.uleb128 0x13
+ 2138 0754 0C000000 		.4byte	.LVL62
+ 2139 0758 67060000 		.4byte	0x667
+ 2140 075c 13       		.uleb128 0x13
+ 2141 075d 10000000 		.4byte	.LVL63
+ 2142 0761 0D0C0000 		.4byte	0xc0d
+ 2143 0765 13       		.uleb128 0x13
+ 2144 0766 14000000 		.4byte	.LVL64
+ 2145 076a 180C0000 		.4byte	0xc18
+ 2146 076e 13       		.uleb128 0x13
+ 2147 076f 18000000 		.4byte	.LVL65
+ 2148 0773 230C0000 		.4byte	0xc23
+ 2149 0777 14       		.uleb128 0x14
+ 2150 0778 22000000 		.4byte	.LVL66
+ 2151 077c 2E0C0000 		.4byte	0xc2e
+ 2152 0780 95070000 		.4byte	0x795
+ 2153 0784 15       		.uleb128 0x15
+ 2154 0785 01       		.uleb128 0x1
+ 2155 0786 50       		.byte	0x50
+ 2156 0787 02       		.uleb128 0x2
+ 2157 0788 08       		.byte	0x8
+ 2158 0789 64       		.byte	0x64
+ 2159 078a 15       		.uleb128 0x15
+ 2160 078b 01       		.uleb128 0x1
+ 2161 078c 51       		.byte	0x51
+ 2162 078d 01       		.uleb128 0x1
+ 2163 078e 30       		.byte	0x30
+ 2164 078f 15       		.uleb128 0x15
+ 2165 0790 01       		.uleb128 0x1
+ 2166 0791 52       		.byte	0x52
+ 2167 0792 01       		.uleb128 0x1
+ 2168 0793 31       		.byte	0x31
+ 2169 0794 00       		.byte	0
+ 2170 0795 14       		.uleb128 0x14
+ 2171 0796 30000000 		.4byte	.LVL67
+ 2172 079a 3A0B0000 		.4byte	0xb3a
+ 2173 079e AD070000 		.4byte	0x7ad
+ 2174 07a2 15       		.uleb128 0x15
+ 2175 07a3 01       		.uleb128 0x1
+ 2176 07a4 50       		.byte	0x50
+ 2177 07a5 01       		.uleb128 0x1
+ 2178 07a6 31       		.byte	0x31
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 49
+
+
+ 2179 07a7 15       		.uleb128 0x15
+ 2180 07a8 01       		.uleb128 0x1
+ 2181 07a9 51       		.byte	0x51
+ 2182 07aa 01       		.uleb128 0x1
+ 2183 07ab 30       		.byte	0x30
+ 2184 07ac 00       		.byte	0
+ 2185 07ad 14       		.uleb128 0x14
+ 2186 07ae 36000000 		.4byte	.LVL68
+ 2187 07b2 450B0000 		.4byte	0xb45
+ 2188 07b6 C4070000 		.4byte	0x7c4
+ 2189 07ba 15       		.uleb128 0x15
+ 2190 07bb 01       		.uleb128 0x1
+ 2191 07bc 50       		.byte	0x50
+ 2192 07bd 05       		.uleb128 0x5
+ 2193 07be 03       		.byte	0x3
+ 2194 07bf A8000000 		.4byte	.LC17
+ 2195 07c3 00       		.byte	0
+ 2196 07c4 14       		.uleb128 0x14
+ 2197 07c5 42000000 		.4byte	.LVL69
+ 2198 07c9 3A0C0000 		.4byte	0xc3a
+ 2199 07cd E2070000 		.4byte	0x7e2
+ 2200 07d1 15       		.uleb128 0x15
+ 2201 07d2 01       		.uleb128 0x1
+ 2202 07d3 50       		.byte	0x50
+ 2203 07d4 01       		.uleb128 0x1
+ 2204 07d5 38       		.byte	0x38
+ 2205 07d6 15       		.uleb128 0x15
+ 2206 07d7 01       		.uleb128 0x1
+ 2207 07d8 51       		.byte	0x51
+ 2208 07d9 02       		.uleb128 0x2
+ 2209 07da 08       		.byte	0x8
+ 2210 07db 28       		.byte	0x28
+ 2211 07dc 15       		.uleb128 0x15
+ 2212 07dd 01       		.uleb128 0x1
+ 2213 07de 52       		.byte	0x52
+ 2214 07df 01       		.uleb128 0x1
+ 2215 07e0 30       		.byte	0x30
+ 2216 07e1 00       		.byte	0
+ 2217 07e2 14       		.uleb128 0x14
+ 2218 07e3 50000000 		.4byte	.LVL70
+ 2219 07e7 3A0B0000 		.4byte	0xb3a
+ 2220 07eb FA070000 		.4byte	0x7fa
+ 2221 07ef 15       		.uleb128 0x15
+ 2222 07f0 01       		.uleb128 0x1
+ 2223 07f1 50       		.byte	0x50
+ 2224 07f2 01       		.uleb128 0x1
+ 2225 07f3 31       		.byte	0x31
+ 2226 07f4 15       		.uleb128 0x15
+ 2227 07f5 01       		.uleb128 0x1
+ 2228 07f6 51       		.byte	0x51
+ 2229 07f7 01       		.uleb128 0x1
+ 2230 07f8 30       		.byte	0x30
+ 2231 07f9 00       		.byte	0
+ 2232 07fa 14       		.uleb128 0x14
+ 2233 07fb 56000000 		.4byte	.LVL71
+ 2234 07ff 450B0000 		.4byte	0xb45
+ 2235 0803 11080000 		.4byte	0x811
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 50
+
+
+ 2236 0807 15       		.uleb128 0x15
+ 2237 0808 01       		.uleb128 0x1
+ 2238 0809 50       		.byte	0x50
+ 2239 080a 05       		.uleb128 0x5
+ 2240 080b 03       		.byte	0x3
+ 2241 080c BC000000 		.4byte	.LC18
+ 2242 0810 00       		.byte	0
+ 2243 0811 14       		.uleb128 0x14
+ 2244 0812 6A000000 		.4byte	.LVL72
+ 2245 0816 460C0000 		.4byte	0xc46
+ 2246 081a 48080000 		.4byte	0x848
+ 2247 081e 15       		.uleb128 0x15
+ 2248 081f 01       		.uleb128 0x1
+ 2249 0820 50       		.byte	0x50
+ 2250 0821 05       		.uleb128 0x5
+ 2251 0822 03       		.byte	0x3
+ 2252 0823 00000000 		.4byte	vGetData
+ 2253 0827 15       		.uleb128 0x15
+ 2254 0828 01       		.uleb128 0x1
+ 2255 0829 51       		.byte	0x51
+ 2256 082a 05       		.uleb128 0x5
+ 2257 082b 03       		.byte	0x3
+ 2258 082c C8000000 		.4byte	.LC19
+ 2259 0830 15       		.uleb128 0x15
+ 2260 0831 01       		.uleb128 0x1
+ 2261 0832 52       		.byte	0x52
+ 2262 0833 02       		.uleb128 0x2
+ 2263 0834 08       		.byte	0x8
+ 2264 0835 C8       		.byte	0xc8
+ 2265 0836 15       		.uleb128 0x15
+ 2266 0837 01       		.uleb128 0x1
+ 2267 0838 53       		.byte	0x53
+ 2268 0839 01       		.uleb128 0x1
+ 2269 083a 30       		.byte	0x30
+ 2270 083b 15       		.uleb128 0x15
+ 2271 083c 02       		.uleb128 0x2
+ 2272 083d 7D       		.byte	0x7d
+ 2273 083e 00       		.sleb128 0
+ 2274 083f 01       		.uleb128 0x1
+ 2275 0840 34       		.byte	0x34
+ 2276 0841 15       		.uleb128 0x15
+ 2277 0842 02       		.uleb128 0x2
+ 2278 0843 7D       		.byte	0x7d
+ 2279 0844 04       		.sleb128 4
+ 2280 0845 01       		.uleb128 0x1
+ 2281 0846 30       		.byte	0x30
+ 2282 0847 00       		.byte	0
+ 2283 0848 14       		.uleb128 0x14
+ 2284 0849 76000000 		.4byte	.LVL74
+ 2285 084d 3A0B0000 		.4byte	0xb3a
+ 2286 0851 60080000 		.4byte	0x860
+ 2287 0855 15       		.uleb128 0x15
+ 2288 0856 01       		.uleb128 0x1
+ 2289 0857 50       		.byte	0x50
+ 2290 0858 01       		.uleb128 0x1
+ 2291 0859 31       		.byte	0x31
+ 2292 085a 15       		.uleb128 0x15
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 51
+
+
+ 2293 085b 01       		.uleb128 0x1
+ 2294 085c 51       		.byte	0x51
+ 2295 085d 01       		.uleb128 0x1
+ 2296 085e 30       		.byte	0x30
+ 2297 085f 00       		.byte	0
+ 2298 0860 14       		.uleb128 0x14
+ 2299 0861 7C000000 		.4byte	.LVL75
+ 2300 0865 450B0000 		.4byte	0xb45
+ 2301 0869 77080000 		.4byte	0x877
+ 2302 086d 15       		.uleb128 0x15
+ 2303 086e 01       		.uleb128 0x1
+ 2304 086f 50       		.byte	0x50
+ 2305 0870 05       		.uleb128 0x5
+ 2306 0871 03       		.byte	0x3
+ 2307 0872 D4000000 		.4byte	.LC20
+ 2308 0876 00       		.byte	0
+ 2309 0877 14       		.uleb128 0x14
+ 2310 0878 90000000 		.4byte	.LVL78
+ 2311 087c 460C0000 		.4byte	0xc46
+ 2312 0880 AE080000 		.4byte	0x8ae
+ 2313 0884 15       		.uleb128 0x15
+ 2314 0885 01       		.uleb128 0x1
+ 2315 0886 50       		.byte	0x50
+ 2316 0887 05       		.uleb128 0x5
+ 2317 0888 03       		.byte	0x3
+ 2318 0889 00000000 		.4byte	vDisplayData
+ 2319 088d 15       		.uleb128 0x15
+ 2320 088e 01       		.uleb128 0x1
+ 2321 088f 51       		.byte	0x51
+ 2322 0890 05       		.uleb128 0x5
+ 2323 0891 03       		.byte	0x3
+ 2324 0892 E8000000 		.4byte	.LC21
+ 2325 0896 15       		.uleb128 0x15
+ 2326 0897 01       		.uleb128 0x1
+ 2327 0898 52       		.byte	0x52
+ 2328 0899 02       		.uleb128 0x2
+ 2329 089a 08       		.byte	0x8
+ 2330 089b C8       		.byte	0xc8
+ 2331 089c 15       		.uleb128 0x15
+ 2332 089d 01       		.uleb128 0x1
+ 2333 089e 53       		.byte	0x53
+ 2334 089f 01       		.uleb128 0x1
+ 2335 08a0 30       		.byte	0x30
+ 2336 08a1 15       		.uleb128 0x15
+ 2337 08a2 02       		.uleb128 0x2
+ 2338 08a3 7D       		.byte	0x7d
+ 2339 08a4 00       		.sleb128 0
+ 2340 08a5 01       		.uleb128 0x1
+ 2341 08a6 34       		.byte	0x34
+ 2342 08a7 15       		.uleb128 0x15
+ 2343 08a8 02       		.uleb128 0x2
+ 2344 08a9 7D       		.byte	0x7d
+ 2345 08aa 04       		.sleb128 4
+ 2346 08ab 01       		.uleb128 0x1
+ 2347 08ac 30       		.byte	0x30
+ 2348 08ad 00       		.byte	0
+ 2349 08ae 14       		.uleb128 0x14
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 52
+
+
+ 2350 08af 9C000000 		.4byte	.LVL80
+ 2351 08b3 3A0B0000 		.4byte	0xb3a
+ 2352 08b7 C6080000 		.4byte	0x8c6
+ 2353 08bb 15       		.uleb128 0x15
+ 2354 08bc 01       		.uleb128 0x1
+ 2355 08bd 50       		.byte	0x50
+ 2356 08be 01       		.uleb128 0x1
+ 2357 08bf 31       		.byte	0x31
+ 2358 08c0 15       		.uleb128 0x15
+ 2359 08c1 01       		.uleb128 0x1
+ 2360 08c2 51       		.byte	0x51
+ 2361 08c3 01       		.uleb128 0x1
+ 2362 08c4 30       		.byte	0x30
+ 2363 08c5 00       		.byte	0
+ 2364 08c6 14       		.uleb128 0x14
+ 2365 08c7 A2000000 		.4byte	.LVL81
+ 2366 08cb 450B0000 		.4byte	0xb45
+ 2367 08cf DD080000 		.4byte	0x8dd
+ 2368 08d3 15       		.uleb128 0x15
+ 2369 08d4 01       		.uleb128 0x1
+ 2370 08d5 50       		.byte	0x50
+ 2371 08d6 05       		.uleb128 0x5
+ 2372 08d7 03       		.byte	0x3
+ 2373 08d8 D4000000 		.4byte	.LC20
+ 2374 08dc 00       		.byte	0
+ 2375 08dd 14       		.uleb128 0x14
+ 2376 08de B6000000 		.4byte	.LVL84
+ 2377 08e2 460C0000 		.4byte	0xc46
+ 2378 08e6 14090000 		.4byte	0x914
+ 2379 08ea 15       		.uleb128 0x15
+ 2380 08eb 01       		.uleb128 0x1
+ 2381 08ec 50       		.byte	0x50
+ 2382 08ed 05       		.uleb128 0x5
+ 2383 08ee 03       		.byte	0x3
+ 2384 08ef 00000000 		.4byte	vUARTComm
+ 2385 08f3 15       		.uleb128 0x15
+ 2386 08f4 01       		.uleb128 0x1
+ 2387 08f5 51       		.byte	0x51
+ 2388 08f6 05       		.uleb128 0x5
+ 2389 08f7 03       		.byte	0x3
+ 2390 08f8 F8000000 		.4byte	.LC22
+ 2391 08fc 15       		.uleb128 0x15
+ 2392 08fd 01       		.uleb128 0x1
+ 2393 08fe 52       		.byte	0x52
+ 2394 08ff 02       		.uleb128 0x2
+ 2395 0900 08       		.byte	0x8
+ 2396 0901 C8       		.byte	0xc8
+ 2397 0902 15       		.uleb128 0x15
+ 2398 0903 01       		.uleb128 0x1
+ 2399 0904 53       		.byte	0x53
+ 2400 0905 01       		.uleb128 0x1
+ 2401 0906 30       		.byte	0x30
+ 2402 0907 15       		.uleb128 0x15
+ 2403 0908 02       		.uleb128 0x2
+ 2404 0909 7D       		.byte	0x7d
+ 2405 090a 00       		.sleb128 0
+ 2406 090b 01       		.uleb128 0x1
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 53
+
+
+ 2407 090c 34       		.byte	0x34
+ 2408 090d 15       		.uleb128 0x15
+ 2409 090e 02       		.uleb128 0x2
+ 2410 090f 7D       		.byte	0x7d
+ 2411 0910 04       		.sleb128 4
+ 2412 0911 01       		.uleb128 0x1
+ 2413 0912 30       		.byte	0x30
+ 2414 0913 00       		.byte	0
+ 2415 0914 14       		.uleb128 0x14
+ 2416 0915 C2000000 		.4byte	.LVL86
+ 2417 0919 3A0B0000 		.4byte	0xb3a
+ 2418 091d 2C090000 		.4byte	0x92c
+ 2419 0921 15       		.uleb128 0x15
+ 2420 0922 01       		.uleb128 0x1
+ 2421 0923 50       		.byte	0x50
+ 2422 0924 01       		.uleb128 0x1
+ 2423 0925 31       		.byte	0x31
+ 2424 0926 15       		.uleb128 0x15
+ 2425 0927 01       		.uleb128 0x1
+ 2426 0928 51       		.byte	0x51
+ 2427 0929 01       		.uleb128 0x1
+ 2428 092a 30       		.byte	0x30
+ 2429 092b 00       		.byte	0
+ 2430 092c 14       		.uleb128 0x14
+ 2431 092d C8000000 		.4byte	.LVL87
+ 2432 0931 450B0000 		.4byte	0xb45
+ 2433 0935 43090000 		.4byte	0x943
+ 2434 0939 15       		.uleb128 0x15
+ 2435 093a 01       		.uleb128 0x1
+ 2436 093b 50       		.byte	0x50
+ 2437 093c 05       		.uleb128 0x5
+ 2438 093d 03       		.byte	0x3
+ 2439 093e D4000000 		.4byte	.LC20
+ 2440 0942 00       		.byte	0
+ 2441 0943 14       		.uleb128 0x14
+ 2442 0944 E0000000 		.4byte	.LVL90
+ 2443 0948 460C0000 		.4byte	0xc46
+ 2444 094c 75090000 		.4byte	0x975
+ 2445 0950 15       		.uleb128 0x15
+ 2446 0951 01       		.uleb128 0x1
+ 2447 0952 50       		.byte	0x50
+ 2448 0953 05       		.uleb128 0x5
+ 2449 0954 03       		.byte	0x3
+ 2450 0955 00000000 		.4byte	vTasks
+ 2451 0959 15       		.uleb128 0x15
+ 2452 095a 01       		.uleb128 0x1
+ 2453 095b 51       		.byte	0x51
+ 2454 095c 05       		.uleb128 0x5
+ 2455 095d 03       		.byte	0x3
+ 2456 095e 04010000 		.4byte	.LC23
+ 2457 0962 15       		.uleb128 0x15
+ 2458 0963 01       		.uleb128 0x1
+ 2459 0964 52       		.byte	0x52
+ 2460 0965 02       		.uleb128 0x2
+ 2461 0966 08       		.byte	0x8
+ 2462 0967 C8       		.byte	0xc8
+ 2463 0968 15       		.uleb128 0x15
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 54
+
+
+ 2464 0969 02       		.uleb128 0x2
+ 2465 096a 7D       		.byte	0x7d
+ 2466 096b 00       		.sleb128 0
+ 2467 096c 01       		.uleb128 0x1
+ 2468 096d 36       		.byte	0x36
+ 2469 096e 15       		.uleb128 0x15
+ 2470 096f 02       		.uleb128 0x2
+ 2471 0970 7D       		.byte	0x7d
+ 2472 0971 04       		.sleb128 4
+ 2473 0972 01       		.uleb128 0x1
+ 2474 0973 30       		.byte	0x30
+ 2475 0974 00       		.byte	0
+ 2476 0975 14       		.uleb128 0x14
+ 2477 0976 EC000000 		.4byte	.LVL92
+ 2478 097a 3A0B0000 		.4byte	0xb3a
+ 2479 097e 8D090000 		.4byte	0x98d
+ 2480 0982 15       		.uleb128 0x15
+ 2481 0983 01       		.uleb128 0x1
+ 2482 0984 50       		.byte	0x50
+ 2483 0985 01       		.uleb128 0x1
+ 2484 0986 31       		.byte	0x31
+ 2485 0987 15       		.uleb128 0x15
+ 2486 0988 01       		.uleb128 0x1
+ 2487 0989 51       		.byte	0x51
+ 2488 098a 01       		.uleb128 0x1
+ 2489 098b 30       		.byte	0x30
+ 2490 098c 00       		.byte	0
+ 2491 098d 14       		.uleb128 0x14
+ 2492 098e F2000000 		.4byte	.LVL93
+ 2493 0992 450B0000 		.4byte	0xb45
+ 2494 0996 A4090000 		.4byte	0x9a4
+ 2495 099a 15       		.uleb128 0x15
+ 2496 099b 01       		.uleb128 0x1
+ 2497 099c 50       		.byte	0x50
+ 2498 099d 05       		.uleb128 0x5
+ 2499 099e 03       		.byte	0x3
+ 2500 099f D4000000 		.4byte	.LC20
+ 2501 09a3 00       		.byte	0
+ 2502 09a4 13       		.uleb128 0x13
+ 2503 09a5 F8000000 		.4byte	.LVL95
+ 2504 09a9 520C0000 		.4byte	0xc52
+ 2505 09ad 00       		.byte	0
+ 2506 09ae 20       		.uleb128 0x20
+ 2507 09af C1010000 		.4byte	.LASF44
+ 2508 09b3 01       		.byte	0x1
+ 2509 09b4 AF01     		.2byte	0x1af
+ 2510 09b6 AD000000 		.4byte	0xad
+ 2511 09ba 00000000 		.4byte	.LFB76
+ 2512 09be 30000000 		.4byte	.LFE76-.LFB76
+ 2513 09c2 01       		.uleb128 0x1
+ 2514 09c3 9C       		.byte	0x9c
+ 2515 09c4 F0090000 		.4byte	0x9f0
+ 2516 09c8 1D       		.uleb128 0x1d
+ 2517 09c9 92000000 		.4byte	.LASF45
+ 2518 09cd 01       		.byte	0x1
+ 2519 09ce B101     		.2byte	0x1b1
+ 2520 09d0 AD000000 		.4byte	0xad
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 55
+
+
+ 2521 09d4 F1000000 		.4byte	.LLST6
+ 2522 09d8 21       		.uleb128 0x21
+ 2523 09d9 6900     		.ascii	"i\000"
+ 2524 09db 01       		.byte	0x1
+ 2525 09dc B201     		.2byte	0x1b2
+ 2526 09de 7E000000 		.4byte	0x7e
+ 2527 09e2 35010000 		.4byte	.LLST7
+ 2528 09e6 13       		.uleb128 0x13
+ 2529 09e7 0C000000 		.4byte	.LVL98
+ 2530 09eb 5E0C0000 		.4byte	0xc5e
+ 2531 09ef 00       		.byte	0
+ 2532 09f0 22       		.uleb128 0x22
+ 2533 09f1 00000000 		.4byte	.LASF46
+ 2534 09f5 01       		.byte	0x1
+ 2535 09f6 FB       		.byte	0xfb
+ 2536 09f7 00000000 		.4byte	.LFB72
+ 2537 09fb 60010000 		.4byte	.LFE72-.LFB72
+ 2538 09ff 01       		.uleb128 0x1
+ 2539 0a00 9C       		.byte	0x9c
+ 2540 0a01 BD0A0000 		.4byte	0xabd
+ 2541 0a05 23       		.uleb128 0x23
+ 2542 0a06 39030000 		.4byte	.LASF40
+ 2543 0a0a 01       		.byte	0x1
+ 2544 0a0b FB       		.byte	0xfb
+ 2545 0a0c DB000000 		.4byte	0xdb
+ 2546 0a10 54010000 		.4byte	.LLST8
+ 2547 0a14 11       		.uleb128 0x11
+ 2548 0a15 A8000000 		.4byte	.LASF37
+ 2549 0a19 01       		.byte	0x1
+ 2550 0a1a FD       		.byte	0xfd
+ 2551 0a1b 74010000 		.4byte	0x174
+ 2552 0a1f 02       		.uleb128 0x2
+ 2553 0a20 91       		.byte	0x91
+ 2554 0a21 40       		.sleb128 -64
+ 2555 0a22 12       		.uleb128 0x12
+ 2556 0a23 6900     		.ascii	"i\000"
+ 2557 0a25 01       		.byte	0x1
+ 2558 0a26 FE       		.byte	0xfe
+ 2559 0a27 8C000000 		.4byte	0x8c
+ 2560 0a2b 75010000 		.4byte	.LLST9
+ 2561 0a2f 14       		.uleb128 0x14
+ 2562 0a30 0E000000 		.4byte	.LVL108
+ 2563 0a34 690C0000 		.4byte	0xc69
+ 2564 0a38 430A0000 		.4byte	0xa43
+ 2565 0a3c 15       		.uleb128 0x15
+ 2566 0a3d 01       		.uleb128 0x1
+ 2567 0a3e 50       		.byte	0x50
+ 2568 0a3f 02       		.uleb128 0x2
+ 2569 0a40 74       		.byte	0x74
+ 2570 0a41 00       		.sleb128 0
+ 2571 0a42 00       		.byte	0
+ 2572 0a43 14       		.uleb128 0x14
+ 2573 0a44 14000000 		.4byte	.LVL109
+ 2574 0a48 740C0000 		.4byte	0xc74
+ 2575 0a4c 560A0000 		.4byte	0xa56
+ 2576 0a50 15       		.uleb128 0x15
+ 2577 0a51 01       		.uleb128 0x1
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 56
+
+
+ 2578 0a52 50       		.byte	0x50
+ 2579 0a53 01       		.uleb128 0x1
+ 2580 0a54 3F       		.byte	0x3f
+ 2581 0a55 00       		.byte	0
+ 2582 0a56 13       		.uleb128 0x13
+ 2583 0a57 18000000 		.4byte	.LVL110
+ 2584 0a5b 7F0C0000 		.4byte	0xc7f
+ 2585 0a5f 14       		.uleb128 0x14
+ 2586 0a60 1E000000 		.4byte	.LVL111
+ 2587 0a64 8A0C0000 		.4byte	0xc8a
+ 2588 0a68 720A0000 		.4byte	0xa72
+ 2589 0a6c 15       		.uleb128 0x15
+ 2590 0a6d 01       		.uleb128 0x1
+ 2591 0a6e 50       		.byte	0x50
+ 2592 0a6f 01       		.uleb128 0x1
+ 2593 0a70 30       		.byte	0x30
+ 2594 0a71 00       		.byte	0
+ 2595 0a72 13       		.uleb128 0x13
+ 2596 0a73 24000000 		.4byte	.LVL112
+ 2597 0a77 5E0C0000 		.4byte	0xc5e
+ 2598 0a7b 13       		.uleb128 0x13
+ 2599 0a7c 42000000 		.4byte	.LVL114
+ 2600 0a80 AE090000 		.4byte	0x9ae
+ 2601 0a84 13       		.uleb128 0x13
+ 2602 0a85 AA000000 		.4byte	.LVL124
+ 2603 0a89 950C0000 		.4byte	0xc95
+ 2604 0a8d 14       		.uleb128 0x14
+ 2605 0a8e 1A010000 		.4byte	.LVL134
+ 2606 0a92 A00C0000 		.4byte	0xca0
+ 2607 0a96 AB0A0000 		.4byte	0xaab
+ 2608 0a9a 15       		.uleb128 0x15
+ 2609 0a9b 01       		.uleb128 0x1
+ 2610 0a9c 51       		.byte	0x51
+ 2611 0a9d 02       		.uleb128 0x2
+ 2612 0a9e 7D       		.byte	0x7d
+ 2613 0a9f 00       		.sleb128 0
+ 2614 0aa0 15       		.uleb128 0x15
+ 2615 0aa1 01       		.uleb128 0x1
+ 2616 0aa2 52       		.byte	0x52
+ 2617 0aa3 01       		.uleb128 0x1
+ 2618 0aa4 3A       		.byte	0x3a
+ 2619 0aa5 15       		.uleb128 0x15
+ 2620 0aa6 01       		.uleb128 0x1
+ 2621 0aa7 53       		.byte	0x53
+ 2622 0aa8 01       		.uleb128 0x1
+ 2623 0aa9 30       		.byte	0x30
+ 2624 0aaa 00       		.byte	0
+ 2625 0aab 1A       		.uleb128 0x1a
+ 2626 0aac 26010000 		.4byte	.LVL135
+ 2627 0ab0 A90B0000 		.4byte	0xba9
+ 2628 0ab4 15       		.uleb128 0x15
+ 2629 0ab5 01       		.uleb128 0x1
+ 2630 0ab6 50       		.byte	0x50
+ 2631 0ab7 03       		.uleb128 0x3
+ 2632 0ab8 0A       		.byte	0xa
+ 2633 0ab9 D007     		.2byte	0x7d0
+ 2634 0abb 00       		.byte	0
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 57
+
+
+ 2635 0abc 00       		.byte	0
+ 2636 0abd 24       		.uleb128 0x24
+ 2637 0abe AD040000 		.4byte	.LASF47
+ 2638 0ac2 0A       		.byte	0xa
+ 2639 0ac3 1207     		.2byte	0x712
+ 2640 0ac5 C90A0000 		.4byte	0xac9
+ 2641 0ac9 25       		.uleb128 0x25
+ 2642 0aca 97000000 		.4byte	0x97
+ 2643 0ace 26       		.uleb128 0x26
+ 2644 0acf CE000000 		.4byte	.LASF48
+ 2645 0ad3 01       		.byte	0x1
+ 2646 0ad4 41       		.byte	0x41
+ 2647 0ad5 35010000 		.4byte	0x135
+ 2648 0ad9 05       		.uleb128 0x5
+ 2649 0ada 03       		.byte	0x3
+ 2650 0adb 00000000 		.4byte	xMessageBuffer
+ 2651 0adf 26       		.uleb128 0x26
+ 2652 0ae0 49000000 		.4byte	.LASF49
+ 2653 0ae4 01       		.byte	0x1
+ 2654 0ae5 43       		.byte	0x43
+ 2655 0ae6 F3000000 		.4byte	0xf3
+ 2656 0aea 05       		.uleb128 0x5
+ 2657 0aeb 03       		.byte	0x3
+ 2658 0aec 00000000 		.4byte	xTask4
+ 2659 0af0 26       		.uleb128 0x26
+ 2660 0af1 D1030000 		.4byte	.LASF50
+ 2661 0af5 01       		.byte	0x1
+ 2662 0af6 4E       		.byte	0x4e
+ 2663 0af7 09010000 		.4byte	0x109
+ 2664 0afb 05       		.uleb128 0x5
+ 2665 0afc 03       		.byte	0x3
+ 2666 0afd 00000000 		.4byte	xQueue
+ 2667 0b01 27       		.uleb128 0x27
+ 2668 0b02 17010000 		.4byte	.LASF51
+ 2669 0b06 17010000 		.4byte	.LASF51
+ 2670 0b0a 0B       		.byte	0xb
+ 2671 0b0b 71       		.byte	0x71
+ 2672 0b0c 28       		.uleb128 0x28
+ 2673 0b0d 09000000 		.4byte	.LASF52
+ 2674 0b11 09000000 		.4byte	.LASF52
+ 2675 0b15 08       		.byte	0x8
+ 2676 0b16 9D01     		.2byte	0x19d
+ 2677 0b18 27       		.uleb128 0x27
+ 2678 0b19 DF030000 		.4byte	.LASF53
+ 2679 0b1d DF030000 		.4byte	.LASF53
+ 2680 0b21 0B       		.byte	0xb
+ 2681 0b22 73       		.byte	0x73
+ 2682 0b23 27       		.uleb128 0x27
+ 2683 0b24 0A040000 		.4byte	.LASF54
+ 2684 0b28 0A040000 		.4byte	.LASF54
+ 2685 0b2c 0B       		.byte	0xb
+ 2686 0b2d 6F       		.byte	0x6f
+ 2687 0b2e 28       		.uleb128 0x28
+ 2688 0b2f 3B000000 		.4byte	.LASF55
+ 2689 0b33 3B000000 		.4byte	.LASF55
+ 2690 0b37 07       		.byte	0x7
+ 2691 0b38 6403     		.2byte	0x364
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 58
+
+
+ 2692 0b3a 27       		.uleb128 0x27
+ 2693 0b3b A0040000 		.4byte	.LASF56
+ 2694 0b3f A0040000 		.4byte	.LASF56
+ 2695 0b43 0C       		.byte	0xc
+ 2696 0b44 3D       		.byte	0x3d
+ 2697 0b45 27       		.uleb128 0x27
+ 2698 0b46 DF020000 		.4byte	.LASF57
+ 2699 0b4a DF020000 		.4byte	.LASF57
+ 2700 0b4e 0C       		.byte	0xc
+ 2701 0b4f 3C       		.byte	0x3c
+ 2702 0b50 27       		.uleb128 0x27
+ 2703 0b51 88020000 		.4byte	.LASF58
+ 2704 0b55 88020000 		.4byte	.LASF58
+ 2705 0b59 0D       		.byte	0xd
+ 2706 0b5a E7       		.byte	0xe7
+ 2707 0b5b 27       		.uleb128 0x27
+ 2708 0b5c 24010000 		.4byte	.LASF59
+ 2709 0b60 24010000 		.4byte	.LASF59
+ 2710 0b64 0B       		.byte	0xb
+ 2711 0b65 8B       		.byte	0x8b
+ 2712 0b66 28       		.uleb128 0x28
+ 2713 0b67 57000000 		.4byte	.LASF60
+ 2714 0b6b 57000000 		.4byte	.LASF60
+ 2715 0b6f 08       		.byte	0x8
+ 2716 0b70 F601     		.2byte	0x1f6
+ 2717 0b72 27       		.uleb128 0x27
+ 2718 0b73 77040000 		.4byte	.LASF61
+ 2719 0b77 77040000 		.4byte	.LASF61
+ 2720 0b7b 0E       		.byte	0xe
+ 2721 0b7c 1C       		.byte	0x1c
+ 2722 0b7d 27       		.uleb128 0x27
+ 2723 0b7e 09010000 		.4byte	.LASF62
+ 2724 0b82 09010000 		.4byte	.LASF62
+ 2725 0b86 0F       		.byte	0xf
+ 2726 0b87 26       		.byte	0x26
+ 2727 0b88 27       		.uleb128 0x27
+ 2728 0b89 AD000000 		.4byte	.LASF63
+ 2729 0b8d AD000000 		.4byte	.LASF63
+ 2730 0b91 10       		.byte	0x10
+ 2731 0b92 C3       		.byte	0xc3
+ 2732 0b93 27       		.uleb128 0x27
+ 2733 0b94 61010000 		.4byte	.LASF64
+ 2734 0b98 61010000 		.4byte	.LASF64
+ 2735 0b9c 11       		.byte	0x11
+ 2736 0b9d 26       		.byte	0x26
+ 2737 0b9e 27       		.uleb128 0x27
+ 2738 0b9f 85030000 		.4byte	.LASF65
+ 2739 0ba3 85030000 		.4byte	.LASF65
+ 2740 0ba7 12       		.byte	0x12
+ 2741 0ba8 26       		.byte	0x26
+ 2742 0ba9 28       		.uleb128 0x28
+ 2743 0baa C3000000 		.4byte	.LASF66
+ 2744 0bae C3000000 		.4byte	.LASF66
+ 2745 0bb2 06       		.byte	0x6
+ 2746 0bb3 F602     		.2byte	0x2f6
+ 2747 0bb5 27       		.uleb128 0x27
+ 2748 0bb6 3B020000 		.4byte	.LASF67
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 59
+
+
+ 2749 0bba 3B020000 		.4byte	.LASF67
+ 2750 0bbe 0C       		.byte	0xc
+ 2751 0bbf 38       		.byte	0x38
+ 2752 0bc0 27       		.uleb128 0x27
+ 2753 0bc1 50050000 		.4byte	.LASF68
+ 2754 0bc5 50050000 		.4byte	.LASF68
+ 2755 0bc9 0C       		.byte	0xc
+ 2756 0bca 3A       		.byte	0x3a
+ 2757 0bcb 27       		.uleb128 0x27
+ 2758 0bcc 48050000 		.4byte	.LASF69
+ 2759 0bd0 48050000 		.4byte	.LASF69
+ 2760 0bd4 13       		.byte	0x13
+ 2761 0bd5 76       		.byte	0x76
+ 2762 0bd6 27       		.uleb128 0x27
+ 2763 0bd7 51040000 		.4byte	.LASF70
+ 2764 0bdb 51040000 		.4byte	.LASF70
+ 2765 0bdf 14       		.byte	0x14
+ 2766 0be0 18       		.byte	0x18
+ 2767 0be1 27       		.uleb128 0x27
+ 2768 0be2 BE030000 		.4byte	.LASF71
+ 2769 0be6 BE030000 		.4byte	.LASF71
+ 2770 0bea 0B       		.byte	0xb
+ 2771 0beb 54       		.byte	0x54
+ 2772 0bec 27       		.uleb128 0x27
+ 2773 0bed AB030000 		.4byte	.LASF72
+ 2774 0bf1 AB030000 		.4byte	.LASF72
+ 2775 0bf5 0B       		.byte	0xb
+ 2776 0bf6 75       		.byte	0x75
+ 2777 0bf7 27       		.uleb128 0x27
+ 2778 0bf8 91010000 		.4byte	.LASF73
+ 2779 0bfc 91010000 		.4byte	.LASF73
+ 2780 0c00 0B       		.byte	0xb
+ 2781 0c01 8F       		.byte	0x8f
+ 2782 0c02 27       		.uleb128 0x27
+ 2783 0c03 56010000 		.4byte	.LASF74
+ 2784 0c07 56010000 		.4byte	.LASF74
+ 2785 0c0b 15       		.byte	0x15
+ 2786 0c0c 25       		.byte	0x25
+ 2787 0c0d 27       		.uleb128 0x27
+ 2788 0c0e 22000000 		.4byte	.LASF75
+ 2789 0c12 22000000 		.4byte	.LASF75
+ 2790 0c16 16       		.byte	0x16
+ 2791 0c17 34       		.byte	0x34
+ 2792 0c18 27       		.uleb128 0x27
+ 2793 0c19 DD000000 		.4byte	.LASF76
+ 2794 0c1d DD000000 		.4byte	.LASF76
+ 2795 0c21 17       		.byte	0x17
+ 2796 0c22 19       		.byte	0x19
+ 2797 0c23 27       		.uleb128 0x27
+ 2798 0c24 D4010000 		.4byte	.LASF77
+ 2799 0c28 D4010000 		.4byte	.LASF77
+ 2800 0c2c 10       		.byte	0x10
+ 2801 0c2d 92       		.byte	0x92
+ 2802 0c2e 28       		.uleb128 0x28
+ 2803 0c2f 33010000 		.4byte	.LASF78
+ 2804 0c33 33010000 		.4byte	.LASF78
+ 2805 0c37 08       		.byte	0x8
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 60
+
+
+ 2806 0c38 4503     		.2byte	0x345
+ 2807 0c3a 28       		.uleb128 0x28
+ 2808 0c3b 5C020000 		.4byte	.LASF79
+ 2809 0c3f 5C020000 		.4byte	.LASF79
+ 2810 0c43 07       		.byte	0x7
+ 2811 0c44 D805     		.2byte	0x5d8
+ 2812 0c46 28       		.uleb128 0x28
+ 2813 0c47 61050000 		.4byte	.LASF80
+ 2814 0c4b 61050000 		.4byte	.LASF80
+ 2815 0c4f 06       		.byte	0x6
+ 2816 0c50 4A01     		.2byte	0x14a
+ 2817 0c52 28       		.uleb128 0x28
+ 2818 0c53 A4010000 		.4byte	.LASF81
+ 2819 0c57 A4010000 		.4byte	.LASF81
+ 2820 0c5b 06       		.byte	0x6
+ 2821 0c5c 9C04     		.2byte	0x49c
+ 2822 0c5e 27       		.uleb128 0x27
+ 2823 0c5f 98030000 		.4byte	.LASF82
+ 2824 0c63 98030000 		.4byte	.LASF82
+ 2825 0c67 16       		.byte	0x16
+ 2826 0c68 3B       		.byte	0x3b
+ 2827 0c69 27       		.uleb128 0x27
+ 2828 0c6a FD000000 		.4byte	.LASF83
+ 2829 0c6e FD000000 		.4byte	.LASF83
+ 2830 0c72 15       		.byte	0x15
+ 2831 0c73 57       		.byte	0x57
+ 2832 0c74 27       		.uleb128 0x27
+ 2833 0c75 70020000 		.4byte	.LASF84
+ 2834 0c79 70020000 		.4byte	.LASF84
+ 2835 0c7d 13       		.byte	0x13
+ 2836 0c7e 77       		.byte	0x77
+ 2837 0c7f 27       		.uleb128 0x27
+ 2838 0c80 7E000000 		.4byte	.LASF85
+ 2839 0c84 7E000000 		.4byte	.LASF85
+ 2840 0c88 16       		.byte	0x16
+ 2841 0c89 D1       		.byte	0xd1
+ 2842 0c8a 27       		.uleb128 0x27
+ 2843 0c8b 1E020000 		.4byte	.LASF86
+ 2844 0c8f 1E020000 		.4byte	.LASF86
+ 2845 0c93 16       		.byte	0x16
+ 2846 0c94 39       		.byte	0x39
+ 2847 0c95 29       		.uleb128 0x29
+ 2848 0c96 6C6F6700 		.ascii	"log\000"
+ 2849 0c9a 6C6F6700 		.ascii	"log\000"
+ 2850 0c9e 18       		.byte	0x18
+ 2851 0c9f 84       		.byte	0x84
+ 2852 0ca0 28       		.uleb128 0x28
+ 2853 0ca1 6B010000 		.4byte	.LASF87
+ 2854 0ca5 6B010000 		.4byte	.LASF87
+ 2855 0ca9 07       		.byte	0x7
+ 2856 0caa 8A02     		.2byte	0x28a
+ 2857 0cac 00       		.byte	0
+ 2858              		.section	.debug_abbrev,"",%progbits
+ 2859              	.Ldebug_abbrev0:
+ 2860 0000 01       		.uleb128 0x1
+ 2861 0001 11       		.uleb128 0x11
+ 2862 0002 01       		.byte	0x1
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 61
+
+
+ 2863 0003 25       		.uleb128 0x25
+ 2864 0004 0E       		.uleb128 0xe
+ 2865 0005 13       		.uleb128 0x13
+ 2866 0006 0B       		.uleb128 0xb
+ 2867 0007 03       		.uleb128 0x3
+ 2868 0008 0E       		.uleb128 0xe
+ 2869 0009 1B       		.uleb128 0x1b
+ 2870 000a 0E       		.uleb128 0xe
+ 2871 000b 55       		.uleb128 0x55
+ 2872 000c 17       		.uleb128 0x17
+ 2873 000d 11       		.uleb128 0x11
+ 2874 000e 01       		.uleb128 0x1
+ 2875 000f 10       		.uleb128 0x10
+ 2876 0010 17       		.uleb128 0x17
+ 2877 0011 00       		.byte	0
+ 2878 0012 00       		.byte	0
+ 2879 0013 02       		.uleb128 0x2
+ 2880 0014 24       		.uleb128 0x24
+ 2881 0015 00       		.byte	0
+ 2882 0016 0B       		.uleb128 0xb
+ 2883 0017 0B       		.uleb128 0xb
+ 2884 0018 3E       		.uleb128 0x3e
+ 2885 0019 0B       		.uleb128 0xb
+ 2886 001a 03       		.uleb128 0x3
+ 2887 001b 0E       		.uleb128 0xe
+ 2888 001c 00       		.byte	0
+ 2889 001d 00       		.byte	0
+ 2890 001e 03       		.uleb128 0x3
+ 2891 001f 16       		.uleb128 0x16
+ 2892 0020 00       		.byte	0
+ 2893 0021 03       		.uleb128 0x3
+ 2894 0022 0E       		.uleb128 0xe
+ 2895 0023 3A       		.uleb128 0x3a
+ 2896 0024 0B       		.uleb128 0xb
+ 2897 0025 3B       		.uleb128 0x3b
+ 2898 0026 0B       		.uleb128 0xb
+ 2899 0027 49       		.uleb128 0x49
+ 2900 0028 13       		.uleb128 0x13
+ 2901 0029 00       		.byte	0
+ 2902 002a 00       		.byte	0
+ 2903 002b 04       		.uleb128 0x4
+ 2904 002c 24       		.uleb128 0x24
+ 2905 002d 00       		.byte	0
+ 2906 002e 0B       		.uleb128 0xb
+ 2907 002f 0B       		.uleb128 0xb
+ 2908 0030 3E       		.uleb128 0x3e
+ 2909 0031 0B       		.uleb128 0xb
+ 2910 0032 03       		.uleb128 0x3
+ 2911 0033 08       		.uleb128 0x8
+ 2912 0034 00       		.byte	0
+ 2913 0035 00       		.byte	0
+ 2914 0036 05       		.uleb128 0x5
+ 2915 0037 0F       		.uleb128 0xf
+ 2916 0038 00       		.byte	0
+ 2917 0039 0B       		.uleb128 0xb
+ 2918 003a 0B       		.uleb128 0xb
+ 2919 003b 00       		.byte	0
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 62
+
+
+ 2920 003c 00       		.byte	0
+ 2921 003d 06       		.uleb128 0x6
+ 2922 003e 0F       		.uleb128 0xf
+ 2923 003f 00       		.byte	0
+ 2924 0040 0B       		.uleb128 0xb
+ 2925 0041 0B       		.uleb128 0xb
+ 2926 0042 49       		.uleb128 0x49
+ 2927 0043 13       		.uleb128 0x13
+ 2928 0044 00       		.byte	0
+ 2929 0045 00       		.byte	0
+ 2930 0046 07       		.uleb128 0x7
+ 2931 0047 13       		.uleb128 0x13
+ 2932 0048 00       		.byte	0
+ 2933 0049 03       		.uleb128 0x3
+ 2934 004a 0E       		.uleb128 0xe
+ 2935 004b 3C       		.uleb128 0x3c
+ 2936 004c 19       		.uleb128 0x19
+ 2937 004d 00       		.byte	0
+ 2938 004e 00       		.byte	0
+ 2939 004f 08       		.uleb128 0x8
+ 2940 0050 13       		.uleb128 0x13
+ 2941 0051 01       		.byte	0x1
+ 2942 0052 03       		.uleb128 0x3
+ 2943 0053 0E       		.uleb128 0xe
+ 2944 0054 0B       		.uleb128 0xb
+ 2945 0055 0B       		.uleb128 0xb
+ 2946 0056 3A       		.uleb128 0x3a
+ 2947 0057 0B       		.uleb128 0xb
+ 2948 0058 3B       		.uleb128 0x3b
+ 2949 0059 0B       		.uleb128 0xb
+ 2950 005a 01       		.uleb128 0x1
+ 2951 005b 13       		.uleb128 0x13
+ 2952 005c 00       		.byte	0
+ 2953 005d 00       		.byte	0
+ 2954 005e 09       		.uleb128 0x9
+ 2955 005f 0D       		.uleb128 0xd
+ 2956 0060 00       		.byte	0
+ 2957 0061 03       		.uleb128 0x3
+ 2958 0062 08       		.uleb128 0x8
+ 2959 0063 3A       		.uleb128 0x3a
+ 2960 0064 0B       		.uleb128 0xb
+ 2961 0065 3B       		.uleb128 0x3b
+ 2962 0066 0B       		.uleb128 0xb
+ 2963 0067 49       		.uleb128 0x49
+ 2964 0068 13       		.uleb128 0x13
+ 2965 0069 38       		.uleb128 0x38
+ 2966 006a 0B       		.uleb128 0xb
+ 2967 006b 00       		.byte	0
+ 2968 006c 00       		.byte	0
+ 2969 006d 0A       		.uleb128 0xa
+ 2970 006e 0D       		.uleb128 0xd
+ 2971 006f 00       		.byte	0
+ 2972 0070 03       		.uleb128 0x3
+ 2973 0071 0E       		.uleb128 0xe
+ 2974 0072 3A       		.uleb128 0x3a
+ 2975 0073 0B       		.uleb128 0xb
+ 2976 0074 3B       		.uleb128 0x3b
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 63
+
+
+ 2977 0075 0B       		.uleb128 0xb
+ 2978 0076 49       		.uleb128 0x49
+ 2979 0077 13       		.uleb128 0x13
+ 2980 0078 38       		.uleb128 0x38
+ 2981 0079 0B       		.uleb128 0xb
+ 2982 007a 00       		.byte	0
+ 2983 007b 00       		.byte	0
+ 2984 007c 0B       		.uleb128 0xb
+ 2985 007d 01       		.uleb128 0x1
+ 2986 007e 01       		.byte	0x1
+ 2987 007f 49       		.uleb128 0x49
+ 2988 0080 13       		.uleb128 0x13
+ 2989 0081 01       		.uleb128 0x1
+ 2990 0082 13       		.uleb128 0x13
+ 2991 0083 00       		.byte	0
+ 2992 0084 00       		.byte	0
+ 2993 0085 0C       		.uleb128 0xc
+ 2994 0086 21       		.uleb128 0x21
+ 2995 0087 00       		.byte	0
+ 2996 0088 49       		.uleb128 0x49
+ 2997 0089 13       		.uleb128 0x13
+ 2998 008a 2F       		.uleb128 0x2f
+ 2999 008b 0B       		.uleb128 0xb
+ 3000 008c 00       		.byte	0
+ 3001 008d 00       		.byte	0
+ 3002 008e 0D       		.uleb128 0xd
+ 3003 008f 04       		.uleb128 0x4
+ 3004 0090 01       		.byte	0x1
+ 3005 0091 03       		.uleb128 0x3
+ 3006 0092 0E       		.uleb128 0xe
+ 3007 0093 0B       		.uleb128 0xb
+ 3008 0094 0B       		.uleb128 0xb
+ 3009 0095 49       		.uleb128 0x49
+ 3010 0096 13       		.uleb128 0x13
+ 3011 0097 3A       		.uleb128 0x3a
+ 3012 0098 0B       		.uleb128 0xb
+ 3013 0099 3B       		.uleb128 0x3b
+ 3014 009a 0B       		.uleb128 0xb
+ 3015 009b 01       		.uleb128 0x1
+ 3016 009c 13       		.uleb128 0x13
+ 3017 009d 00       		.byte	0
+ 3018 009e 00       		.byte	0
+ 3019 009f 0E       		.uleb128 0xe
+ 3020 00a0 28       		.uleb128 0x28
+ 3021 00a1 00       		.byte	0
+ 3022 00a2 03       		.uleb128 0x3
+ 3023 00a3 0E       		.uleb128 0xe
+ 3024 00a4 1C       		.uleb128 0x1c
+ 3025 00a5 0B       		.uleb128 0xb
+ 3026 00a6 00       		.byte	0
+ 3027 00a7 00       		.byte	0
+ 3028 00a8 0F       		.uleb128 0xf
+ 3029 00a9 2E       		.uleb128 0x2e
+ 3030 00aa 01       		.byte	0x1
+ 3031 00ab 3F       		.uleb128 0x3f
+ 3032 00ac 19       		.uleb128 0x19
+ 3033 00ad 03       		.uleb128 0x3
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 64
+
+
+ 3034 00ae 0E       		.uleb128 0xe
+ 3035 00af 3A       		.uleb128 0x3a
+ 3036 00b0 0B       		.uleb128 0xb
+ 3037 00b1 3B       		.uleb128 0x3b
+ 3038 00b2 0B       		.uleb128 0xb
+ 3039 00b3 27       		.uleb128 0x27
+ 3040 00b4 19       		.uleb128 0x19
+ 3041 00b5 11       		.uleb128 0x11
+ 3042 00b6 01       		.uleb128 0x1
+ 3043 00b7 12       		.uleb128 0x12
+ 3044 00b8 06       		.uleb128 0x6
+ 3045 00b9 40       		.uleb128 0x40
+ 3046 00ba 18       		.uleb128 0x18
+ 3047 00bb 9742     		.uleb128 0x2117
+ 3048 00bd 19       		.uleb128 0x19
+ 3049 00be 01       		.uleb128 0x1
+ 3050 00bf 13       		.uleb128 0x13
+ 3051 00c0 00       		.byte	0
+ 3052 00c1 00       		.byte	0
+ 3053 00c2 10       		.uleb128 0x10
+ 3054 00c3 34       		.uleb128 0x34
+ 3055 00c4 00       		.byte	0
+ 3056 00c5 03       		.uleb128 0x3
+ 3057 00c6 08       		.uleb128 0x8
+ 3058 00c7 3A       		.uleb128 0x3a
+ 3059 00c8 0B       		.uleb128 0xb
+ 3060 00c9 3B       		.uleb128 0x3b
+ 3061 00ca 0B       		.uleb128 0xb
+ 3062 00cb 49       		.uleb128 0x49
+ 3063 00cc 13       		.uleb128 0x13
+ 3064 00cd 02       		.uleb128 0x2
+ 3065 00ce 18       		.uleb128 0x18
+ 3066 00cf 00       		.byte	0
+ 3067 00d0 00       		.byte	0
+ 3068 00d1 11       		.uleb128 0x11
+ 3069 00d2 34       		.uleb128 0x34
+ 3070 00d3 00       		.byte	0
+ 3071 00d4 03       		.uleb128 0x3
+ 3072 00d5 0E       		.uleb128 0xe
+ 3073 00d6 3A       		.uleb128 0x3a
+ 3074 00d7 0B       		.uleb128 0xb
+ 3075 00d8 3B       		.uleb128 0x3b
+ 3076 00d9 0B       		.uleb128 0xb
+ 3077 00da 49       		.uleb128 0x49
+ 3078 00db 13       		.uleb128 0x13
+ 3079 00dc 02       		.uleb128 0x2
+ 3080 00dd 18       		.uleb128 0x18
+ 3081 00de 00       		.byte	0
+ 3082 00df 00       		.byte	0
+ 3083 00e0 12       		.uleb128 0x12
+ 3084 00e1 34       		.uleb128 0x34
+ 3085 00e2 00       		.byte	0
+ 3086 00e3 03       		.uleb128 0x3
+ 3087 00e4 08       		.uleb128 0x8
+ 3088 00e5 3A       		.uleb128 0x3a
+ 3089 00e6 0B       		.uleb128 0xb
+ 3090 00e7 3B       		.uleb128 0x3b
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 65
+
+
+ 3091 00e8 0B       		.uleb128 0xb
+ 3092 00e9 49       		.uleb128 0x49
+ 3093 00ea 13       		.uleb128 0x13
+ 3094 00eb 02       		.uleb128 0x2
+ 3095 00ec 17       		.uleb128 0x17
+ 3096 00ed 00       		.byte	0
+ 3097 00ee 00       		.byte	0
+ 3098 00ef 13       		.uleb128 0x13
+ 3099 00f0 898201   		.uleb128 0x4109
+ 3100 00f3 00       		.byte	0
+ 3101 00f4 11       		.uleb128 0x11
+ 3102 00f5 01       		.uleb128 0x1
+ 3103 00f6 31       		.uleb128 0x31
+ 3104 00f7 13       		.uleb128 0x13
+ 3105 00f8 00       		.byte	0
+ 3106 00f9 00       		.byte	0
+ 3107 00fa 14       		.uleb128 0x14
+ 3108 00fb 898201   		.uleb128 0x4109
+ 3109 00fe 01       		.byte	0x1
+ 3110 00ff 11       		.uleb128 0x11
+ 3111 0100 01       		.uleb128 0x1
+ 3112 0101 31       		.uleb128 0x31
+ 3113 0102 13       		.uleb128 0x13
+ 3114 0103 01       		.uleb128 0x1
+ 3115 0104 13       		.uleb128 0x13
+ 3116 0105 00       		.byte	0
+ 3117 0106 00       		.byte	0
+ 3118 0107 15       		.uleb128 0x15
+ 3119 0108 8A8201   		.uleb128 0x410a
+ 3120 010b 00       		.byte	0
+ 3121 010c 02       		.uleb128 0x2
+ 3122 010d 18       		.uleb128 0x18
+ 3123 010e 9142     		.uleb128 0x2111
+ 3124 0110 18       		.uleb128 0x18
+ 3125 0111 00       		.byte	0
+ 3126 0112 00       		.byte	0
+ 3127 0113 16       		.uleb128 0x16
+ 3128 0114 2E       		.uleb128 0x2e
+ 3129 0115 01       		.byte	0x1
+ 3130 0116 3F       		.uleb128 0x3f
+ 3131 0117 19       		.uleb128 0x19
+ 3132 0118 03       		.uleb128 0x3
+ 3133 0119 0E       		.uleb128 0xe
+ 3134 011a 3A       		.uleb128 0x3a
+ 3135 011b 0B       		.uleb128 0xb
+ 3136 011c 3B       		.uleb128 0x3b
+ 3137 011d 05       		.uleb128 0x5
+ 3138 011e 27       		.uleb128 0x27
+ 3139 011f 19       		.uleb128 0x19
+ 3140 0120 8701     		.uleb128 0x87
+ 3141 0122 19       		.uleb128 0x19
+ 3142 0123 11       		.uleb128 0x11
+ 3143 0124 01       		.uleb128 0x1
+ 3144 0125 12       		.uleb128 0x12
+ 3145 0126 06       		.uleb128 0x6
+ 3146 0127 40       		.uleb128 0x40
+ 3147 0128 18       		.uleb128 0x18
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 66
+
+
+ 3148 0129 9642     		.uleb128 0x2116
+ 3149 012b 19       		.uleb128 0x19
+ 3150 012c 01       		.uleb128 0x1
+ 3151 012d 13       		.uleb128 0x13
+ 3152 012e 00       		.byte	0
+ 3153 012f 00       		.byte	0
+ 3154 0130 17       		.uleb128 0x17
+ 3155 0131 05       		.uleb128 0x5
+ 3156 0132 00       		.byte	0
+ 3157 0133 03       		.uleb128 0x3
+ 3158 0134 0E       		.uleb128 0xe
+ 3159 0135 3A       		.uleb128 0x3a
+ 3160 0136 0B       		.uleb128 0xb
+ 3161 0137 3B       		.uleb128 0x3b
+ 3162 0138 05       		.uleb128 0x5
+ 3163 0139 49       		.uleb128 0x49
+ 3164 013a 13       		.uleb128 0x13
+ 3165 013b 02       		.uleb128 0x2
+ 3166 013c 17       		.uleb128 0x17
+ 3167 013d 00       		.byte	0
+ 3168 013e 00       		.byte	0
+ 3169 013f 18       		.uleb128 0x18
+ 3170 0140 34       		.uleb128 0x34
+ 3171 0141 00       		.byte	0
+ 3172 0142 03       		.uleb128 0x3
+ 3173 0143 08       		.uleb128 0x8
+ 3174 0144 3A       		.uleb128 0x3a
+ 3175 0145 0B       		.uleb128 0xb
+ 3176 0146 3B       		.uleb128 0x3b
+ 3177 0147 05       		.uleb128 0x5
+ 3178 0148 49       		.uleb128 0x49
+ 3179 0149 13       		.uleb128 0x13
+ 3180 014a 02       		.uleb128 0x2
+ 3181 014b 18       		.uleb128 0x18
+ 3182 014c 00       		.byte	0
+ 3183 014d 00       		.byte	0
+ 3184 014e 19       		.uleb128 0x19
+ 3185 014f 34       		.uleb128 0x34
+ 3186 0150 00       		.byte	0
+ 3187 0151 03       		.uleb128 0x3
+ 3188 0152 0E       		.uleb128 0xe
+ 3189 0153 3A       		.uleb128 0x3a
+ 3190 0154 0B       		.uleb128 0xb
+ 3191 0155 3B       		.uleb128 0x3b
+ 3192 0156 05       		.uleb128 0x5
+ 3193 0157 49       		.uleb128 0x49
+ 3194 0158 13       		.uleb128 0x13
+ 3195 0159 02       		.uleb128 0x2
+ 3196 015a 18       		.uleb128 0x18
+ 3197 015b 00       		.byte	0
+ 3198 015c 00       		.byte	0
+ 3199 015d 1A       		.uleb128 0x1a
+ 3200 015e 898201   		.uleb128 0x4109
+ 3201 0161 01       		.byte	0x1
+ 3202 0162 11       		.uleb128 0x11
+ 3203 0163 01       		.uleb128 0x1
+ 3204 0164 31       		.uleb128 0x31
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 67
+
+
+ 3205 0165 13       		.uleb128 0x13
+ 3206 0166 00       		.byte	0
+ 3207 0167 00       		.byte	0
+ 3208 0168 1B       		.uleb128 0x1b
+ 3209 0169 2E       		.uleb128 0x2e
+ 3210 016a 01       		.byte	0x1
+ 3211 016b 3F       		.uleb128 0x3f
+ 3212 016c 19       		.uleb128 0x19
+ 3213 016d 03       		.uleb128 0x3
+ 3214 016e 0E       		.uleb128 0xe
+ 3215 016f 3A       		.uleb128 0x3a
+ 3216 0170 0B       		.uleb128 0xb
+ 3217 0171 3B       		.uleb128 0x3b
+ 3218 0172 05       		.uleb128 0x5
+ 3219 0173 27       		.uleb128 0x27
+ 3220 0174 19       		.uleb128 0x19
+ 3221 0175 8701     		.uleb128 0x87
+ 3222 0177 19       		.uleb128 0x19
+ 3223 0178 11       		.uleb128 0x11
+ 3224 0179 01       		.uleb128 0x1
+ 3225 017a 12       		.uleb128 0x12
+ 3226 017b 06       		.uleb128 0x6
+ 3227 017c 40       		.uleb128 0x40
+ 3228 017d 18       		.uleb128 0x18
+ 3229 017e 9742     		.uleb128 0x2117
+ 3230 0180 19       		.uleb128 0x19
+ 3231 0181 01       		.uleb128 0x1
+ 3232 0182 13       		.uleb128 0x13
+ 3233 0183 00       		.byte	0
+ 3234 0184 00       		.byte	0
+ 3235 0185 1C       		.uleb128 0x1c
+ 3236 0186 34       		.uleb128 0x34
+ 3237 0187 00       		.byte	0
+ 3238 0188 03       		.uleb128 0x3
+ 3239 0189 08       		.uleb128 0x8
+ 3240 018a 3A       		.uleb128 0x3a
+ 3241 018b 0B       		.uleb128 0xb
+ 3242 018c 3B       		.uleb128 0x3b
+ 3243 018d 05       		.uleb128 0x5
+ 3244 018e 49       		.uleb128 0x49
+ 3245 018f 13       		.uleb128 0x13
+ 3246 0190 00       		.byte	0
+ 3247 0191 00       		.byte	0
+ 3248 0192 1D       		.uleb128 0x1d
+ 3249 0193 34       		.uleb128 0x34
+ 3250 0194 00       		.byte	0
+ 3251 0195 03       		.uleb128 0x3
+ 3252 0196 0E       		.uleb128 0xe
+ 3253 0197 3A       		.uleb128 0x3a
+ 3254 0198 0B       		.uleb128 0xb
+ 3255 0199 3B       		.uleb128 0x3b
+ 3256 019a 05       		.uleb128 0x5
+ 3257 019b 49       		.uleb128 0x49
+ 3258 019c 13       		.uleb128 0x13
+ 3259 019d 02       		.uleb128 0x2
+ 3260 019e 17       		.uleb128 0x17
+ 3261 019f 00       		.byte	0
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 68
+
+
+ 3262 01a0 00       		.byte	0
+ 3263 01a1 1E       		.uleb128 0x1e
+ 3264 01a2 2E       		.uleb128 0x2e
+ 3265 01a3 01       		.byte	0x1
+ 3266 01a4 3F       		.uleb128 0x3f
+ 3267 01a5 19       		.uleb128 0x19
+ 3268 01a6 03       		.uleb128 0x3
+ 3269 01a7 0E       		.uleb128 0xe
+ 3270 01a8 3A       		.uleb128 0x3a
+ 3271 01a9 0B       		.uleb128 0xb
+ 3272 01aa 3B       		.uleb128 0x3b
+ 3273 01ab 0B       		.uleb128 0xb
+ 3274 01ac 11       		.uleb128 0x11
+ 3275 01ad 01       		.uleb128 0x1
+ 3276 01ae 12       		.uleb128 0x12
+ 3277 01af 06       		.uleb128 0x6
+ 3278 01b0 40       		.uleb128 0x40
+ 3279 01b1 18       		.uleb128 0x18
+ 3280 01b2 9742     		.uleb128 0x2117
+ 3281 01b4 19       		.uleb128 0x19
+ 3282 01b5 01       		.uleb128 0x1
+ 3283 01b6 13       		.uleb128 0x13
+ 3284 01b7 00       		.byte	0
+ 3285 01b8 00       		.byte	0
+ 3286 01b9 1F       		.uleb128 0x1f
+ 3287 01ba 2E       		.uleb128 0x2e
+ 3288 01bb 01       		.byte	0x1
+ 3289 01bc 3F       		.uleb128 0x3f
+ 3290 01bd 19       		.uleb128 0x19
+ 3291 01be 03       		.uleb128 0x3
+ 3292 01bf 0E       		.uleb128 0xe
+ 3293 01c0 3A       		.uleb128 0x3a
+ 3294 01c1 0B       		.uleb128 0xb
+ 3295 01c2 3B       		.uleb128 0x3b
+ 3296 01c3 0B       		.uleb128 0xb
+ 3297 01c4 27       		.uleb128 0x27
+ 3298 01c5 19       		.uleb128 0x19
+ 3299 01c6 49       		.uleb128 0x49
+ 3300 01c7 13       		.uleb128 0x13
+ 3301 01c8 8701     		.uleb128 0x87
+ 3302 01ca 19       		.uleb128 0x19
+ 3303 01cb 11       		.uleb128 0x11
+ 3304 01cc 01       		.uleb128 0x1
+ 3305 01cd 12       		.uleb128 0x12
+ 3306 01ce 06       		.uleb128 0x6
+ 3307 01cf 40       		.uleb128 0x40
+ 3308 01d0 18       		.uleb128 0x18
+ 3309 01d1 9742     		.uleb128 0x2117
+ 3310 01d3 19       		.uleb128 0x19
+ 3311 01d4 01       		.uleb128 0x1
+ 3312 01d5 13       		.uleb128 0x13
+ 3313 01d6 00       		.byte	0
+ 3314 01d7 00       		.byte	0
+ 3315 01d8 20       		.uleb128 0x20
+ 3316 01d9 2E       		.uleb128 0x2e
+ 3317 01da 01       		.byte	0x1
+ 3318 01db 3F       		.uleb128 0x3f
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 69
+
+
+ 3319 01dc 19       		.uleb128 0x19
+ 3320 01dd 03       		.uleb128 0x3
+ 3321 01de 0E       		.uleb128 0xe
+ 3322 01df 3A       		.uleb128 0x3a
+ 3323 01e0 0B       		.uleb128 0xb
+ 3324 01e1 3B       		.uleb128 0x3b
+ 3325 01e2 05       		.uleb128 0x5
+ 3326 01e3 27       		.uleb128 0x27
+ 3327 01e4 19       		.uleb128 0x19
+ 3328 01e5 49       		.uleb128 0x49
+ 3329 01e6 13       		.uleb128 0x13
+ 3330 01e7 11       		.uleb128 0x11
+ 3331 01e8 01       		.uleb128 0x1
+ 3332 01e9 12       		.uleb128 0x12
+ 3333 01ea 06       		.uleb128 0x6
+ 3334 01eb 40       		.uleb128 0x40
+ 3335 01ec 18       		.uleb128 0x18
+ 3336 01ed 9642     		.uleb128 0x2116
+ 3337 01ef 19       		.uleb128 0x19
+ 3338 01f0 01       		.uleb128 0x1
+ 3339 01f1 13       		.uleb128 0x13
+ 3340 01f2 00       		.byte	0
+ 3341 01f3 00       		.byte	0
+ 3342 01f4 21       		.uleb128 0x21
+ 3343 01f5 34       		.uleb128 0x34
+ 3344 01f6 00       		.byte	0
+ 3345 01f7 03       		.uleb128 0x3
+ 3346 01f8 08       		.uleb128 0x8
+ 3347 01f9 3A       		.uleb128 0x3a
+ 3348 01fa 0B       		.uleb128 0xb
+ 3349 01fb 3B       		.uleb128 0x3b
+ 3350 01fc 05       		.uleb128 0x5
+ 3351 01fd 49       		.uleb128 0x49
+ 3352 01fe 13       		.uleb128 0x13
+ 3353 01ff 02       		.uleb128 0x2
+ 3354 0200 17       		.uleb128 0x17
+ 3355 0201 00       		.byte	0
+ 3356 0202 00       		.byte	0
+ 3357 0203 22       		.uleb128 0x22
+ 3358 0204 2E       		.uleb128 0x2e
+ 3359 0205 01       		.byte	0x1
+ 3360 0206 3F       		.uleb128 0x3f
+ 3361 0207 19       		.uleb128 0x19
+ 3362 0208 03       		.uleb128 0x3
+ 3363 0209 0E       		.uleb128 0xe
+ 3364 020a 3A       		.uleb128 0x3a
+ 3365 020b 0B       		.uleb128 0xb
+ 3366 020c 3B       		.uleb128 0x3b
+ 3367 020d 0B       		.uleb128 0xb
+ 3368 020e 27       		.uleb128 0x27
+ 3369 020f 19       		.uleb128 0x19
+ 3370 0210 8701     		.uleb128 0x87
+ 3371 0212 19       		.uleb128 0x19
+ 3372 0213 11       		.uleb128 0x11
+ 3373 0214 01       		.uleb128 0x1
+ 3374 0215 12       		.uleb128 0x12
+ 3375 0216 06       		.uleb128 0x6
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 70
+
+
+ 3376 0217 40       		.uleb128 0x40
+ 3377 0218 18       		.uleb128 0x18
+ 3378 0219 9642     		.uleb128 0x2116
+ 3379 021b 19       		.uleb128 0x19
+ 3380 021c 01       		.uleb128 0x1
+ 3381 021d 13       		.uleb128 0x13
+ 3382 021e 00       		.byte	0
+ 3383 021f 00       		.byte	0
+ 3384 0220 23       		.uleb128 0x23
+ 3385 0221 05       		.uleb128 0x5
+ 3386 0222 00       		.byte	0
+ 3387 0223 03       		.uleb128 0x3
+ 3388 0224 0E       		.uleb128 0xe
+ 3389 0225 3A       		.uleb128 0x3a
+ 3390 0226 0B       		.uleb128 0xb
+ 3391 0227 3B       		.uleb128 0x3b
+ 3392 0228 0B       		.uleb128 0xb
+ 3393 0229 49       		.uleb128 0x49
+ 3394 022a 13       		.uleb128 0x13
+ 3395 022b 02       		.uleb128 0x2
+ 3396 022c 17       		.uleb128 0x17
+ 3397 022d 00       		.byte	0
+ 3398 022e 00       		.byte	0
+ 3399 022f 24       		.uleb128 0x24
+ 3400 0230 34       		.uleb128 0x34
+ 3401 0231 00       		.byte	0
+ 3402 0232 03       		.uleb128 0x3
+ 3403 0233 0E       		.uleb128 0xe
+ 3404 0234 3A       		.uleb128 0x3a
+ 3405 0235 0B       		.uleb128 0xb
+ 3406 0236 3B       		.uleb128 0x3b
+ 3407 0237 05       		.uleb128 0x5
+ 3408 0238 49       		.uleb128 0x49
+ 3409 0239 13       		.uleb128 0x13
+ 3410 023a 3F       		.uleb128 0x3f
+ 3411 023b 19       		.uleb128 0x19
+ 3412 023c 3C       		.uleb128 0x3c
+ 3413 023d 19       		.uleb128 0x19
+ 3414 023e 00       		.byte	0
+ 3415 023f 00       		.byte	0
+ 3416 0240 25       		.uleb128 0x25
+ 3417 0241 35       		.uleb128 0x35
+ 3418 0242 00       		.byte	0
+ 3419 0243 49       		.uleb128 0x49
+ 3420 0244 13       		.uleb128 0x13
+ 3421 0245 00       		.byte	0
+ 3422 0246 00       		.byte	0
+ 3423 0247 26       		.uleb128 0x26
+ 3424 0248 34       		.uleb128 0x34
+ 3425 0249 00       		.byte	0
+ 3426 024a 03       		.uleb128 0x3
+ 3427 024b 0E       		.uleb128 0xe
+ 3428 024c 3A       		.uleb128 0x3a
+ 3429 024d 0B       		.uleb128 0xb
+ 3430 024e 3B       		.uleb128 0x3b
+ 3431 024f 0B       		.uleb128 0xb
+ 3432 0250 49       		.uleb128 0x49
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 71
+
+
+ 3433 0251 13       		.uleb128 0x13
+ 3434 0252 3F       		.uleb128 0x3f
+ 3435 0253 19       		.uleb128 0x19
+ 3436 0254 02       		.uleb128 0x2
+ 3437 0255 18       		.uleb128 0x18
+ 3438 0256 00       		.byte	0
+ 3439 0257 00       		.byte	0
+ 3440 0258 27       		.uleb128 0x27
+ 3441 0259 2E       		.uleb128 0x2e
+ 3442 025a 00       		.byte	0
+ 3443 025b 3F       		.uleb128 0x3f
+ 3444 025c 19       		.uleb128 0x19
+ 3445 025d 3C       		.uleb128 0x3c
+ 3446 025e 19       		.uleb128 0x19
+ 3447 025f 6E       		.uleb128 0x6e
+ 3448 0260 0E       		.uleb128 0xe
+ 3449 0261 03       		.uleb128 0x3
+ 3450 0262 0E       		.uleb128 0xe
+ 3451 0263 3A       		.uleb128 0x3a
+ 3452 0264 0B       		.uleb128 0xb
+ 3453 0265 3B       		.uleb128 0x3b
+ 3454 0266 0B       		.uleb128 0xb
+ 3455 0267 00       		.byte	0
+ 3456 0268 00       		.byte	0
+ 3457 0269 28       		.uleb128 0x28
+ 3458 026a 2E       		.uleb128 0x2e
+ 3459 026b 00       		.byte	0
+ 3460 026c 3F       		.uleb128 0x3f
+ 3461 026d 19       		.uleb128 0x19
+ 3462 026e 3C       		.uleb128 0x3c
+ 3463 026f 19       		.uleb128 0x19
+ 3464 0270 6E       		.uleb128 0x6e
+ 3465 0271 0E       		.uleb128 0xe
+ 3466 0272 03       		.uleb128 0x3
+ 3467 0273 0E       		.uleb128 0xe
+ 3468 0274 3A       		.uleb128 0x3a
+ 3469 0275 0B       		.uleb128 0xb
+ 3470 0276 3B       		.uleb128 0x3b
+ 3471 0277 05       		.uleb128 0x5
+ 3472 0278 00       		.byte	0
+ 3473 0279 00       		.byte	0
+ 3474 027a 29       		.uleb128 0x29
+ 3475 027b 2E       		.uleb128 0x2e
+ 3476 027c 00       		.byte	0
+ 3477 027d 3F       		.uleb128 0x3f
+ 3478 027e 19       		.uleb128 0x19
+ 3479 027f 3C       		.uleb128 0x3c
+ 3480 0280 19       		.uleb128 0x19
+ 3481 0281 6E       		.uleb128 0x6e
+ 3482 0282 08       		.uleb128 0x8
+ 3483 0283 03       		.uleb128 0x3
+ 3484 0284 08       		.uleb128 0x8
+ 3485 0285 3A       		.uleb128 0x3a
+ 3486 0286 0B       		.uleb128 0xb
+ 3487 0287 3B       		.uleb128 0x3b
+ 3488 0288 0B       		.uleb128 0xb
+ 3489 0289 00       		.byte	0
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 72
+
+
+ 3490 028a 00       		.byte	0
+ 3491 028b 00       		.byte	0
+ 3492              		.section	.debug_loc,"",%progbits
+ 3493              	.Ldebug_loc0:
+ 3494              	.LLST0:
+ 3495 0000 0E000000 		.4byte	.LVL0
+ 3496 0004 56000000 		.4byte	.LVL1
+ 3497 0008 0100     		.2byte	0x1
+ 3498 000a 50       		.byte	0x50
+ 3499 000b 5E000000 		.4byte	.LVL3
+ 3500 000f 62000000 		.4byte	.LVL4
+ 3501 0013 0100     		.2byte	0x1
+ 3502 0015 50       		.byte	0x50
+ 3503 0016 00000000 		.4byte	0
+ 3504 001a 00000000 		.4byte	0
+ 3505              	.LLST1:
+ 3506 001e 00000000 		.4byte	.LVL7
+ 3507 0022 04000000 		.4byte	.LVL8
+ 3508 0026 0100     		.2byte	0x1
+ 3509 0028 50       		.byte	0x50
+ 3510 0029 04000000 		.4byte	.LVL8
+ 3511 002d B4000000 		.4byte	.LFE73
+ 3512 0031 0400     		.2byte	0x4
+ 3513 0033 F3       		.byte	0xf3
+ 3514 0034 01       		.uleb128 0x1
+ 3515 0035 50       		.byte	0x50
+ 3516 0036 9F       		.byte	0x9f
+ 3517 0037 00000000 		.4byte	0
+ 3518 003b 00000000 		.4byte	0
+ 3519              	.LLST2:
+ 3520 003f 00000000 		.4byte	.LVL22
+ 3521 0043 04000000 		.4byte	.LVL23
+ 3522 0047 0100     		.2byte	0x1
+ 3523 0049 50       		.byte	0x50
+ 3524 004a 04000000 		.4byte	.LVL23
+ 3525 004e 98000000 		.4byte	.LFE74
+ 3526 0052 0400     		.2byte	0x4
+ 3527 0054 F3       		.byte	0xf3
+ 3528 0055 01       		.uleb128 0x1
+ 3529 0056 50       		.byte	0x50
+ 3530 0057 9F       		.byte	0x9f
+ 3531 0058 00000000 		.4byte	0
+ 3532 005c 00000000 		.4byte	0
+ 3533              	.LLST3:
+ 3534 0060 00000000 		.4byte	.LVL30
+ 3535 0064 06000000 		.4byte	.LVL31
+ 3536 0068 0100     		.2byte	0x1
+ 3537 006a 50       		.byte	0x50
+ 3538 006b 06000000 		.4byte	.LVL31
+ 3539 006f C8000000 		.4byte	.LFE75
+ 3540 0073 0100     		.2byte	0x1
+ 3541 0075 54       		.byte	0x54
+ 3542 0076 00000000 		.4byte	0
+ 3543 007a 00000000 		.4byte	0
+ 3544              	.LLST4:
+ 3545 007e 12000000 		.4byte	.LVL32
+ 3546 0082 1A000000 		.4byte	.LVL33
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 73
+
+
+ 3547 0086 0100     		.2byte	0x1
+ 3548 0088 50       		.byte	0x50
+ 3549 0089 00000000 		.4byte	0
+ 3550 008d 00000000 		.4byte	0
+ 3551              	.LLST5:
+ 3552 0091 6A000000 		.4byte	.LVL72
+ 3553 0095 72000000 		.4byte	.LVL73
+ 3554 0099 0100     		.2byte	0x1
+ 3555 009b 50       		.byte	0x50
+ 3556 009c 7E000000 		.4byte	.LVL76
+ 3557 00a0 8C000000 		.4byte	.LVL77
+ 3558 00a4 0100     		.2byte	0x1
+ 3559 00a6 50       		.byte	0x50
+ 3560 00a7 90000000 		.4byte	.LVL78
+ 3561 00ab 98000000 		.4byte	.LVL79
+ 3562 00af 0100     		.2byte	0x1
+ 3563 00b1 50       		.byte	0x50
+ 3564 00b2 A4000000 		.4byte	.LVL82
+ 3565 00b6 B2000000 		.4byte	.LVL83
+ 3566 00ba 0100     		.2byte	0x1
+ 3567 00bc 50       		.byte	0x50
+ 3568 00bd B6000000 		.4byte	.LVL84
+ 3569 00c1 BE000000 		.4byte	.LVL85
+ 3570 00c5 0100     		.2byte	0x1
+ 3571 00c7 50       		.byte	0x50
+ 3572 00c8 CA000000 		.4byte	.LVL88
+ 3573 00cc DC000000 		.4byte	.LVL89
+ 3574 00d0 0100     		.2byte	0x1
+ 3575 00d2 50       		.byte	0x50
+ 3576 00d3 E0000000 		.4byte	.LVL90
+ 3577 00d7 E8000000 		.4byte	.LVL91
+ 3578 00db 0100     		.2byte	0x1
+ 3579 00dd 50       		.byte	0x50
+ 3580 00de F4000000 		.4byte	.LVL94
+ 3581 00e2 F7000000 		.4byte	.LVL95-1
+ 3582 00e6 0100     		.2byte	0x1
+ 3583 00e8 50       		.byte	0x50
+ 3584 00e9 00000000 		.4byte	0
+ 3585 00ed 00000000 		.4byte	0
+ 3586              	.LLST6:
+ 3587 00f1 02000000 		.4byte	.LVL96
+ 3588 00f5 08000000 		.4byte	.LVL97
+ 3589 00f9 0600     		.2byte	0x6
+ 3590 00fb 9E       		.byte	0x9e
+ 3591 00fc 04       		.uleb128 0x4
+ 3592 00fd 00000000 		.4byte	0
+ 3593 0101 08000000 		.4byte	.LVL97
+ 3594 0105 1A000000 		.4byte	.LVL101
+ 3595 0109 0100     		.2byte	0x1
+ 3596 010b 55       		.byte	0x55
+ 3597 010c 1A000000 		.4byte	.LVL101
+ 3598 0110 1C000000 		.4byte	.LVL102
+ 3599 0114 0100     		.2byte	0x1
+ 3600 0116 50       		.byte	0x50
+ 3601 0117 1C000000 		.4byte	.LVL102
+ 3602 011b 28000000 		.4byte	.LVL103
+ 3603 011f 0100     		.2byte	0x1
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 74
+
+
+ 3604 0121 55       		.byte	0x55
+ 3605 0122 28000000 		.4byte	.LVL103
+ 3606 0126 30000000 		.4byte	.LFE76
+ 3607 012a 0100     		.2byte	0x1
+ 3608 012c 50       		.byte	0x50
+ 3609 012d 00000000 		.4byte	0
+ 3610 0131 00000000 		.4byte	0
+ 3611              	.LLST7:
+ 3612 0135 02000000 		.4byte	.LVL96
+ 3613 0139 08000000 		.4byte	.LVL97
+ 3614 013d 0200     		.2byte	0x2
+ 3615 013f 30       		.byte	0x30
+ 3616 0140 9F       		.byte	0x9f
+ 3617 0141 08000000 		.4byte	.LVL97
+ 3618 0145 2A000000 		.4byte	.LVL104
+ 3619 0149 0100     		.2byte	0x1
+ 3620 014b 54       		.byte	0x54
+ 3621 014c 00000000 		.4byte	0
+ 3622 0150 00000000 		.4byte	0
+ 3623              	.LLST8:
+ 3624 0154 00000000 		.4byte	.LVL105
+ 3625 0158 04000000 		.4byte	.LVL106
+ 3626 015c 0100     		.2byte	0x1
+ 3627 015e 50       		.byte	0x50
+ 3628 015f 04000000 		.4byte	.LVL106
+ 3629 0163 60010000 		.4byte	.LFE72
+ 3630 0167 0400     		.2byte	0x4
+ 3631 0169 F3       		.byte	0xf3
+ 3632 016a 01       		.uleb128 0x1
+ 3633 016b 50       		.byte	0x50
+ 3634 016c 9F       		.byte	0x9f
+ 3635 016d 00000000 		.4byte	0
+ 3636 0171 00000000 		.4byte	0
+ 3637              	.LLST9:
+ 3638 0175 04000000 		.4byte	.LVL106
+ 3639 0179 08000000 		.4byte	.LVL107
+ 3640 017d 0200     		.2byte	0x2
+ 3641 017f 30       		.byte	0x30
+ 3642 0180 9F       		.byte	0x9f
+ 3643 0181 08000000 		.4byte	.LVL107
+ 3644 0185 54000000 		.4byte	.LVL116
+ 3645 0189 0100     		.2byte	0x1
+ 3646 018b 54       		.byte	0x54
+ 3647 018c 56000000 		.4byte	.LVL117
+ 3648 0190 7E000000 		.4byte	.LVL119
+ 3649 0194 0100     		.2byte	0x1
+ 3650 0196 54       		.byte	0x54
+ 3651 0197 7E000000 		.4byte	.LVL119
+ 3652 019b 84000000 		.4byte	.LVL120
+ 3653 019f 0100     		.2byte	0x1
+ 3654 01a1 53       		.byte	0x53
+ 3655 01a2 08010000 		.4byte	.LVL132
+ 3656 01a6 0C010000 		.4byte	.LVL133
+ 3657 01aa 0100     		.2byte	0x1
+ 3658 01ac 53       		.byte	0x53
+ 3659 01ad 00000000 		.4byte	0
+ 3660 01b1 00000000 		.4byte	0
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 75
+
+
+ 3661              		.section	.debug_aranges,"",%progbits
+ 3662 0000 54000000 		.4byte	0x54
+ 3663 0004 0200     		.2byte	0x2
+ 3664 0006 00000000 		.4byte	.Ldebug_info0
+ 3665 000a 04       		.byte	0x4
+ 3666 000b 00       		.byte	0
+ 3667 000c 0000     		.2byte	0
+ 3668 000e 0000     		.2byte	0
+ 3669 0010 00000000 		.4byte	.LFB71
+ 3670 0014 7C000000 		.4byte	.LFE71-.LFB71
+ 3671 0018 00000000 		.4byte	.LFB73
+ 3672 001c B4000000 		.4byte	.LFE73-.LFB73
+ 3673 0020 00000000 		.4byte	.LFB74
+ 3674 0024 98000000 		.4byte	.LFE74-.LFB74
+ 3675 0028 00000000 		.4byte	.LFB75
+ 3676 002c C8000000 		.4byte	.LFE75-.LFB75
+ 3677 0030 00000000 		.4byte	.LFB70
+ 3678 0034 44000000 		.4byte	.LFE70-.LFB70
+ 3679 0038 00000000 		.4byte	.LFB69
+ 3680 003c 2C010000 		.4byte	.LFE69-.LFB69
+ 3681 0040 00000000 		.4byte	.LFB76
+ 3682 0044 30000000 		.4byte	.LFE76-.LFB76
+ 3683 0048 00000000 		.4byte	.LFB72
+ 3684 004c 60010000 		.4byte	.LFE72-.LFB72
+ 3685 0050 00000000 		.4byte	0
+ 3686 0054 00000000 		.4byte	0
+ 3687              		.section	.debug_ranges,"",%progbits
+ 3688              	.Ldebug_ranges0:
+ 3689 0000 00000000 		.4byte	.LFB71
+ 3690 0004 7C000000 		.4byte	.LFE71
+ 3691 0008 00000000 		.4byte	.LFB73
+ 3692 000c B4000000 		.4byte	.LFE73
+ 3693 0010 00000000 		.4byte	.LFB74
+ 3694 0014 98000000 		.4byte	.LFE74
+ 3695 0018 00000000 		.4byte	.LFB75
+ 3696 001c C8000000 		.4byte	.LFE75
+ 3697 0020 00000000 		.4byte	.LFB70
+ 3698 0024 44000000 		.4byte	.LFE70
+ 3699 0028 00000000 		.4byte	.LFB69
+ 3700 002c 2C010000 		.4byte	.LFE69
+ 3701 0030 00000000 		.4byte	.LFB76
+ 3702 0034 30000000 		.4byte	.LFE76
+ 3703 0038 00000000 		.4byte	.LFB72
+ 3704 003c 60010000 		.4byte	.LFE72
+ 3705 0040 00000000 		.4byte	0
+ 3706 0044 00000000 		.4byte	0
+ 3707              		.section	.debug_line,"",%progbits
+ 3708              	.Ldebug_line0:
+ 3709 0000 B8040000 		.section	.debug_str,"MS",%progbits,1
+ 3709      02006503 
+ 3709      00000201 
+ 3709      FB0E0D00 
+ 3709      01010101 
+ 3710              	.LASF46:
+ 3711 0000 76476574 		.ascii	"vGetData\000"
+ 3711      44617461 
+ 3711      00
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 76
+
+
+ 3712              	.LASF52:
+ 3713 0009 78537472 		.ascii	"xStreamBufferSendFromISR\000"
+ 3713      65616D42 
+ 3713      75666665 
+ 3713      7253656E 
+ 3713      6446726F 
+ 3714              	.LASF75:
+ 3715 0022 53415241 		.ascii	"SARADC_Start\000"
+ 3715      44435F53 
+ 3715      74617274 
+ 3715      00
+ 3716              	.LASF92:
+ 3717 002f 4D795053 		.ascii	"MyPSOCSetup\000"
+ 3717      4F435365 
+ 3717      74757000 
+ 3718              	.LASF55:
+ 3719 003b 78517565 		.ascii	"xQueueReceive\000"
+ 3719      75655265 
+ 3719      63656976 
+ 3719      6500
+ 3720              	.LASF49:
+ 3721 0049 78546173 		.ascii	"xTask4\000"
+ 3721      6B3400
+ 3722              	.LASF34:
+ 3723 0050 53544154 		.ascii	"STATES\000"
+ 3723      455300
+ 3724              	.LASF60:
+ 3725 0057 78537472 		.ascii	"xStreamBufferReceive\000"
+ 3725      65616D42 
+ 3725      75666665 
+ 3725      72526563 
+ 3725      65697665 
+ 3726              	.LASF28:
+ 3727 006c 53747265 		.ascii	"StreamBufferDef_t\000"
+ 3727      616D4275 
+ 3727      66666572 
+ 3727      4465665F 
+ 3727      7400
+ 3728              	.LASF85:
+ 3729 007e 53415241 		.ascii	"SARADC_StartConvert\000"
+ 3729      44435F53 
+ 3729      74617274 
+ 3729      436F6E76 
+ 3729      65727400 
+ 3730              	.LASF45:
+ 3731 0092 74656D70 		.ascii	"temp\000"
+ 3731      00
+ 3732              	.LASF2:
+ 3733 0097 73686F72 		.ascii	"short int\000"
+ 3733      7420696E 
+ 3733      7400
+ 3734              	.LASF18:
+ 3735 00a1 73697A65 		.ascii	"size_t\000"
+ 3735      5F7400
+ 3736              	.LASF37:
+ 3737 00a8 73656E73 		.ascii	"sens\000"
+ 3737      00
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 77
+
+
+ 3738              	.LASF63:
+ 3739 00ad 53455256 		.ascii	"SERVOPWM_WriteCompare\000"
+ 3739      4F50574D 
+ 3739      5F577269 
+ 3739      7465436F 
+ 3739      6D706172 
+ 3740              	.LASF66:
+ 3741 00c3 76546173 		.ascii	"vTaskDelay\000"
+ 3741      6B44656C 
+ 3741      617900
+ 3742              	.LASF48:
+ 3743 00ce 784D6573 		.ascii	"xMessageBuffer\000"
+ 3743      73616765 
+ 3743      42756666 
+ 3743      657200
+ 3744              	.LASF76:
+ 3745 00dd 46726565 		.ascii	"FreeRTOS_Init\000"
+ 3745      52544F53 
+ 3745      5F496E69 
+ 3745      7400
+ 3746              	.LASF93:
+ 3747 00eb 6D61696E 		.ascii	"main\000"
+ 3747      00
+ 3748              	.LASF38:
+ 3749 00f0 76446973 		.ascii	"vDisplayData\000"
+ 3749      706C6179 
+ 3749      44617461 
+ 3749      00
+ 3750              	.LASF83:
+ 3751 00fd 414D5558 		.ascii	"AMUX_Select\000"
+ 3751      5F53656C 
+ 3751      65637400 
+ 3752              	.LASF62:
+ 3753 0109 55564C69 		.ascii	"UVLight_Write\000"
+ 3753      6768745F 
+ 3753      57726974 
+ 3753      6500
+ 3754              	.LASF51:
+ 3755 0117 55415254 		.ascii	"UART_GetChar\000"
+ 3755      5F476574 
+ 3755      43686172 
+ 3755      00
+ 3756              	.LASF59:
+ 3757 0124 55415254 		.ascii	"UART_PutString\000"
+ 3757      5F507574 
+ 3757      53747269 
+ 3757      6E6700
+ 3758              	.LASF78:
+ 3759 0133 78537472 		.ascii	"xStreamBufferGenericCreate\000"
+ 3759      65616D42 
+ 3759      75666665 
+ 3759      7247656E 
+ 3759      65726963 
+ 3760              	.LASF12:
+ 3761 014e 75696E74 		.ascii	"uint8_t\000"
+ 3761      385F7400 
+ 3762              	.LASF74:
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 78
+
+
+ 3763 0156 414D5558 		.ascii	"AMUX_Start\000"
+ 3763      5F537461 
+ 3763      727400
+ 3764              	.LASF64:
+ 3765 0161 46616E5F 		.ascii	"Fan_Write\000"
+ 3765      57726974 
+ 3765      6500
+ 3766              	.LASF87:
+ 3767 016b 78517565 		.ascii	"xQueueGenericSend\000"
+ 3767      75654765 
+ 3767      6E657269 
+ 3767      6353656E 
+ 3767      6400
+ 3768              	.LASF15:
+ 3769 017d 666C6F61 		.ascii	"float\000"
+ 3769      7400
+ 3770              	.LASF9:
+ 3771 0183 6C6F6E67 		.ascii	"long long int\000"
+ 3771      206C6F6E 
+ 3771      6720696E 
+ 3771      7400
+ 3772              	.LASF73:
+ 3773 0191 55415254 		.ascii	"UART_ClearTxBuffer\000"
+ 3773      5F436C65 
+ 3773      61725478 
+ 3773      42756666 
+ 3773      657200
+ 3774              	.LASF81:
+ 3775 01a4 76546173 		.ascii	"vTaskStartScheduler\000"
+ 3775      6B537461 
+ 3775      72745363 
+ 3775      68656475 
+ 3775      6C657200 
+ 3776              	.LASF6:
+ 3777 01b8 6C6F6E67 		.ascii	"long int\000"
+ 3777      20696E74 
+ 3777      00
+ 3778              	.LASF44:
+ 3779 01c1 47657454 		.ascii	"GetTemp\000"
+ 3779      656D7000 
+ 3780              	.LASF21:
+ 3781 01c9 42617365 		.ascii	"BaseType_t\000"
+ 3781      54797065 
+ 3781      5F7400
+ 3782              	.LASF77:
+ 3783 01d4 53455256 		.ascii	"SERVOPWM_Start\000"
+ 3783      4F50574D 
+ 3783      5F537461 
+ 3783      727400
+ 3784              	.LASF25:
+ 3785 01e3 74736B54 		.ascii	"tskTaskControlBlock\000"
+ 3785      61736B43 
+ 3785      6F6E7472 
+ 3785      6F6C426C 
+ 3785      6F636B00 
+ 3786              	.LASF4:
+ 3787 01f7 5F5F7569 		.ascii	"__uint8_t\000"
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 79
+
+
+ 3787      6E74385F 
+ 3787      7400
+ 3788              	.LASF43:
+ 3789 0201 78526563 		.ascii	"xReceivedBytes\000"
+ 3789      65697665 
+ 3789      64427974 
+ 3789      657300
+ 3790              	.LASF24:
+ 3791 0210 51756575 		.ascii	"QueueHandle_t\000"
+ 3791      6548616E 
+ 3791      646C655F 
+ 3791      7400
+ 3792              	.LASF86:
+ 3793 021e 53415241 		.ascii	"SARADC_IsEndConversion\000"
+ 3793      44435F49 
+ 3793      73456E64 
+ 3793      436F6E76 
+ 3793      65727369 
+ 3794              	.LASF35:
+ 3795 0235 73746174 		.ascii	"state\000"
+ 3795      6500
+ 3796              	.LASF67:
+ 3797 023b 4C43445F 		.ascii	"LCD_Start\000"
+ 3797      53746172 
+ 3797      7400
+ 3798              	.LASF22:
+ 3799 0245 5469636B 		.ascii	"TickType_t\000"
+ 3799      54797065 
+ 3799      5F7400
+ 3800              	.LASF19:
+ 3801 0250 6C6F6E67 		.ascii	"long double\000"
+ 3801      20646F75 
+ 3801      626C6500 
+ 3802              	.LASF79:
+ 3803 025c 78517565 		.ascii	"xQueueGenericCreate\000"
+ 3803      75654765 
+ 3803      6E657269 
+ 3803      63437265 
+ 3803      61746500 
+ 3804              	.LASF84:
+ 3805 0270 43794465 		.ascii	"CyDelayUs\000"
+ 3805      6C617955 
+ 3805      7300
+ 3806              	.LASF1:
+ 3807 027a 756E7369 		.ascii	"unsigned char\000"
+ 3807      676E6564 
+ 3807      20636861 
+ 3807      7200
+ 3808              	.LASF58:
+ 3809 0288 73707269 		.ascii	"sprintf\000"
+ 3809      6E746600 
+ 3810              	.LASF42:
+ 3811 0290 784D6573 		.ascii	"xMesgBuf\000"
+ 3811      67427566 
+ 3811      00
+ 3812              	.LASF0:
+ 3813 0299 7369676E 		.ascii	"signed char\000"
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 80
+
+
+ 3813      65642063 
+ 3813      68617200 
+ 3814              	.LASF10:
+ 3815 02a5 6C6F6E67 		.ascii	"long long unsigned int\000"
+ 3815      206C6F6E 
+ 3815      6720756E 
+ 3815      7369676E 
+ 3815      65642069 
+ 3816              	.LASF14:
+ 3817 02bc 75696E74 		.ascii	"uint32_t\000"
+ 3817      33325F74 
+ 3817      00
+ 3818              	.LASF23:
+ 3819 02c5 5461736B 		.ascii	"TaskHandle_t\000"
+ 3819      48616E64 
+ 3819      6C655F74 
+ 3819      00
+ 3820              	.LASF11:
+ 3821 02d2 756E7369 		.ascii	"unsigned int\000"
+ 3821      676E6564 
+ 3821      20696E74 
+ 3821      00
+ 3822              	.LASF57:
+ 3823 02df 4C43445F 		.ascii	"LCD_PrintString\000"
+ 3823      5072696E 
+ 3823      74537472 
+ 3823      696E6700 
+ 3824              	.LASF90:
+ 3825 02ef 433A5C55 		.ascii	"C:\\Users\\vincent\\Documents\\PSoC Creator\\Reform"
+ 3825      73657273 
+ 3825      5C76696E 
+ 3825      63656E74 
+ 3825      5C446F63 
+ 3826 031d 6174576F 		.ascii	"atWorkspace\\Project1A.cydsn\000"
+ 3826      726B7370 
+ 3826      6163655C 
+ 3826      50726F6A 
+ 3826      65637431 
+ 3827              	.LASF40:
+ 3828 0339 70765061 		.ascii	"pvParameters\000"
+ 3828      72616D65 
+ 3828      74657273 
+ 3828      00
+ 3829              	.LASF41:
+ 3830 0346 76546173 		.ascii	"vTasks\000"
+ 3830      6B7300
+ 3831              	.LASF26:
+ 3832 034d 51756575 		.ascii	"QueueDefinition\000"
+ 3832      65446566 
+ 3832      696E6974 
+ 3832      696F6E00 
+ 3833              	.LASF27:
+ 3834 035d 53747265 		.ascii	"StreamBufferHandle_t\000"
+ 3834      616D4275 
+ 3834      66666572 
+ 3834      48616E64 
+ 3834      6C655F74 
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 81
+
+
+ 3835              	.LASF3:
+ 3836 0372 73686F72 		.ascii	"short unsigned int\000"
+ 3836      7420756E 
+ 3836      7369676E 
+ 3836      65642069 
+ 3836      6E7400
+ 3837              	.LASF65:
+ 3838 0385 48656174 		.ascii	"HeatPad_Write\000"
+ 3838      5061645F 
+ 3838      57726974 
+ 3838      6500
+ 3839              	.LASF17:
+ 3840 0393 63686172 		.ascii	"char\000"
+ 3840      00
+ 3841              	.LASF82:
+ 3842 0398 53415241 		.ascii	"SARADC_GetResult16\000"
+ 3842      44435F47 
+ 3842      65745265 
+ 3842      73756C74 
+ 3842      313600
+ 3843              	.LASF72:
+ 3844 03ab 55415254 		.ascii	"UART_ClearRxBuffer\000"
+ 3844      5F436C65 
+ 3844      61725278 
+ 3844      42756666 
+ 3844      657200
+ 3845              	.LASF71:
+ 3846 03be 55415254 		.ascii	"UART_Start\000"
+ 3846      5F537461 
+ 3846      727400
+ 3847              	.LASF13:
+ 3848 03c9 696E7433 		.ascii	"int32_t\000"
+ 3848      325F7400 
+ 3849              	.LASF50:
+ 3850 03d1 78517565 		.ascii	"xQueue\000"
+ 3850      756500
+ 3851              	.LASF32:
+ 3852 03d8 535F4944 		.ascii	"S_IDLE\000"
+ 3852      4C4500
+ 3853              	.LASF53:
+ 3854 03df 55415254 		.ascii	"UART_GetRxBufferSize\000"
+ 3854      5F476574 
+ 3854      52784275 
+ 3854      66666572 
+ 3854      53697A65 
+ 3855              	.LASF29:
+ 3856 03f4 4D657373 		.ascii	"MessageBufferHandle_t\000"
+ 3856      61676542 
+ 3856      75666665 
+ 3856      7248616E 
+ 3856      646C655F 
+ 3857              	.LASF54:
+ 3858 040a 55415254 		.ascii	"UART_ReadRxData\000"
+ 3858      5F526561 
+ 3858      64527844 
+ 3858      61746100 
+ 3859              	.LASF30:
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 82
+
+
+ 3860 041a 64617461 		.ascii	"data\000"
+ 3860      00
+ 3861              	.LASF89:
+ 3862 041f 6D61696E 		.ascii	"main.c\000"
+ 3862      2E6300
+ 3863              	.LASF8:
+ 3864 0426 6C6F6E67 		.ascii	"long unsigned int\000"
+ 3864      20756E73 
+ 3864      69676E65 
+ 3864      6420696E 
+ 3864      7400
+ 3865              	.LASF16:
+ 3866 0438 646F7562 		.ascii	"double\000"
+ 3866      6C6500
+ 3867              	.LASF31:
+ 3868 043f 53656E73 		.ascii	"Sensors\000"
+ 3868      6F727300 
+ 3869              	.LASF39:
+ 3870 0447 76554152 		.ascii	"vUARTComm\000"
+ 3870      54436F6D 
+ 3870      6D00
+ 3871              	.LASF70:
+ 3872 0451 4953525F 		.ascii	"ISR_UART_StartEx\000"
+ 3872      55415254 
+ 3872      5F537461 
+ 3872      72744578 
+ 3872      00
+ 3873              	.LASF7:
+ 3874 0462 5F5F7569 		.ascii	"__uint32_t\000"
+ 3874      6E743332 
+ 3874      5F7400
+ 3875              	.LASF5:
+ 3876 046d 5F5F696E 		.ascii	"__int32_t\000"
+ 3876      7433325F 
+ 3876      7400
+ 3877              	.LASF61:
+ 3878 0477 73747263 		.ascii	"strcmp\000"
+ 3878      6D7000
+ 3879              	.LASF36:
+ 3880 047e 78486967 		.ascii	"xHigherPriorityTaskToken\000"
+ 3880      68657250 
+ 3880      72696F72 
+ 3880      69747954 
+ 3880      61736B54 
+ 3881              	.LASF20:
+ 3882 0497 73697A65 		.ascii	"sizetype\000"
+ 3882      74797065 
+ 3882      00
+ 3883              	.LASF56:
+ 3884 04a0 4C43445F 		.ascii	"LCD_Position\000"
+ 3884      506F7369 
+ 3884      74696F6E 
+ 3884      00
+ 3885              	.LASF47:
+ 3886 04ad 49544D5F 		.ascii	"ITM_RxBuffer\000"
+ 3886      52784275 
+ 3886      66666572 
+ARM GAS  C:\Users\vincent\AppData\Local\Temp\ccKOzO19.s 			page 83
+
+
+ 3886      00
+ 3887              	.LASF88:
+ 3888 04ba 474E5520 		.ascii	"GNU C11 5.4.1 20160609 (release) [ARM/embedded-5-br"
+ 3888      43313120 
+ 3888      352E342E 
+ 3888      31203230 
+ 3888      31363036 
+ 3889 04ed 616E6368 		.ascii	"anch revision 237715] -mcpu=cortex-m3 -mthumb -g -O"
+ 3889      20726576 
+ 3889      6973696F 
+ 3889      6E203233 
+ 3889      37373135 
+ 3890 0520 67202D66 		.ascii	"g -ffunction-sections -ffat-lto-objects\000"
+ 3890      66756E63 
+ 3890      74696F6E 
+ 3890      2D736563 
+ 3890      74696F6E 
+ 3891              	.LASF69:
+ 3892 0548 43794465 		.ascii	"CyDelay\000"
+ 3892      6C617900 
+ 3893              	.LASF68:
+ 3894 0550 4C43445F 		.ascii	"LCD_WriteControl\000"
+ 3894      57726974 
+ 3894      65436F6E 
+ 3894      74726F6C 
+ 3894      00
+ 3895              	.LASF80:
+ 3896 0561 78546173 		.ascii	"xTaskCreate\000"
+ 3896      6B437265 
+ 3896      61746500 
+ 3897              	.LASF33:
+ 3898 056d 535F474F 		.ascii	"S_GOTDATA\000"
+ 3898      54444154 
+ 3898      4100
+ 3899              	.LASF91:
+ 3900 0577 4D795561 		.ascii	"MyUartISR\000"
+ 3900      72744953 
+ 3900      5200
+ 3901              		.ident	"GCC: (GNU Tools for ARM Embedded Processors) 5.4.1 20160609 (release) [ARM/embedded-5-bran
